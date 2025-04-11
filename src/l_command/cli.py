@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import os
 import subprocess
 import sys
+from pathlib import Path
 
 
 def main() -> int:
@@ -13,20 +13,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    path = args.path
+    path = Path(args.path)
 
     # Check if path exists
-    if not os.path.exists(path):
+    if not path.exists():
         print(f"Error: Path not found: {path}")
         return 1
 
     try:
         # If it's a directory
-        if os.path.isdir(path):
-            subprocess.run(["ls", "-la", path])
+        if path.is_dir():
+            subprocess.run(["ls", "-la", str(path)])
         # If it's a file
         else:
-            subprocess.run(["less", path])
+            subprocess.run(["less", str(path)])
     except subprocess.CalledProcessError as e:
         print(f"Error: {e}")
         return 1
