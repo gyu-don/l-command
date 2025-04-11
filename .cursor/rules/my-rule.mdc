@@ -19,3 +19,4 @@ alwaysApply: true
 - os.pathのかわりにpathlibを使ってください
 - Pythonパッケージは uv add <パッケージ名> により追加します。uv pipは使用しません
     - 開発にしか用いないパッケージはuv add --dev <パッケージ名> により追加します
+- `git` コマンドのviewerに `less` が使われていることがよくあります。 `| cat` でそれを避けることができます
