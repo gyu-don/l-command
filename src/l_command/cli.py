@@ -23,10 +23,10 @@ def main() -> int:
     try:
         # If it's a directory
         if path.is_dir():
-            subprocess.run(["ls", "-la", str(path)])
+            subprocess.run(["ls", "-la", "--color=auto", str(path)])
         # If it's a file
         else:
-            subprocess.run(["less", str(path)])
+            subprocess.run(["less", "-RFX", str(path)])
     except subprocess.CalledProcessError as e:
         print(f"Error: {e}")
         return 1
