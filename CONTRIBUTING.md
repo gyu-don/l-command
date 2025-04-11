@@ -24,25 +24,25 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
 # pre-commitフックのインストール
-pre-commit install
+uv run pre-commit install
 ```
 
 ### 開発コマンド
 ```bash
 # テストの実行
-pytest tests/
+uv run pytest tests/
 
 # カバレッジ付きテスト
-pytest --cov=src/l_command tests/
+uv run pytest --cov=src/l_command tests/
 
 # リントチェック
-ruff check .
+uv run ruff check .
 
 # コードフォーマット
-ruff format .
+uv run ruff format .
 
 # pre-commitフックの手動実行（全ファイル）
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 ### pre-commitの使用方法
@@ -53,10 +53,10 @@ pre-commitは以下のタイミングで自動的に実行されます：
 手動で実行する場合：
 ```bash
 # 全ファイルに対して実行
-pre-commit run --all-files
+uv run pre-commit run --all-files
 
 # 特定のファイルに対して実行
-pre-commit run --files <ファイル名>
+uv run pre-commit run --files <ファイル名>
 ```
 
 pre-commitフックは以下のチェックを行います：

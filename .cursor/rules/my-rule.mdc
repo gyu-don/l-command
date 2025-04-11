@@ -13,3 +13,9 @@ alwaysApply: true
 - To fix automatically, you may run `uv run ruff format .` and `uv run ruff check --fix .`
 - To run Python commands, use `uv run`.
 - You must follow [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
+
+
+## 細かいコーディング規約類
+- os.pathのかわりにpathlibを使ってください
+- Pythonパッケージは uv add <パッケージ名> により追加します。uv pipは使用しません
+    - 開発にしか用いないパッケージはuv add --dev <パッケージ名> により追加します
