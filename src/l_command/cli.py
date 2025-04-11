@@ -4,6 +4,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+from l_command.constants import LINE_THRESHOLD
+
+
+def count_lines(file_path: Path) -> int:
+    """ファイルの行数をカウントする"""
+    try:
+        with file_path.open("rb") as f:
+            return sum(1 for _ in f)
+    except Exception as e:
+        print(f"Error counting lines: {e}")
+        return 0
+
 
 def main() -> int:
     """Execute the l command."""
@@ -26,7 +38,11 @@ def main() -> int:
             subprocess.run(["ls", "-la", "--color=auto", str(path)])
         # If it's a file
         else:
-            subprocess.run(["less", "-RFX", str(path)])
+            line_count = count_lines(path)
+            if line_count <= LINE_THRESHOLD:
+                subprocess.run(["cat", str(path)])
+            else:
+                subprocess.run(["less", "-RFX", str(path)])
     except subprocess.CalledProcessError as e:
         print(f"Error: {e}")
         return 1
