@@ -20,3 +20,8 @@ alwaysApply: true
 - Pythonパッケージは uv add <パッケージ名> により追加します。uv pipは使用しません
     - 開発にしか用いないパッケージはuv add --dev <パッケージ名> により追加します
 - `git` コマンドのviewerに `less` が使われていることがよくあります。 `| cat` でそれを避けることができます
+
+
+## コミット時の確認事項
+- `uv run ruff format`, `uv run ruff check --fix` を事前に行う
+- コミットメッセージは [CONTRIBUTING.md](mdc:CONTRIBUTING.md) に従う。英語にする

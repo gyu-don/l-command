@@ -1,0 +1,9 @@
+{
+  "name": "test",
+  "values": [1, 2, 3],
+  "nested": {
+    "key": "value",
+    "boolean": true,
+    "null_value": null
+  }
+}
