@@ -12,6 +12,7 @@ repos:
     -   id: check-added-large-files
     -   id: check-case-conflict
     -   id: check-json
+        exclude: ^tests/test_files/invalid\.json$
     -   id: check-yaml
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
