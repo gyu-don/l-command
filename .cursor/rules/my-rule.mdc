@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+- `.cursordocs` directory is document for you. Refer [index.md](mdc:.cursordocs/index.md)
+- Commit, code, comments, docstrings should be written in English. Commit rule is also described in [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
+- To fix automatically, you may run `uv run ruff format .` and `uv run ruff check --fix .`
+- To run Python commands, use `uv run`.
+- You must follow [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
