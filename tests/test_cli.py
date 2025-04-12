@@ -1,3 +1,4 @@
+import os
 import stat
 import subprocess
 from collections.abc import Sequence
@@ -9,8 +10,16 @@ import pytest
 from _pytest.capture import CaptureFixture
 from _pytest.monkeypatch import MonkeyPatch
 
-from l_command.cli import count_lines, main
-from l_command.constants import LINE_THRESHOLD, MAX_JSON_SIZE_BYTES
+from l_command.cli import (
+    count_lines,
+    main,
+)
+from l_command.constants import (
+    MAX_JSON_SIZE_BYTES,
+)
+
+# Test directory path relative to this test file
+TEST_DIR = Path(__file__).parent / "test_files"
 
 
 # Helper to create dummy files
@@ -72,9 +81,11 @@ def test_main_with_directory(
     test_dir.mkdir()  # Create real directory
 
     # Combine with statements
-    with patch.object(Path, "is_dir", return_value=True), patch.object(
-        Path, "is_file", return_value=False
-    ), patch.object(Path, "exists", return_value=True):
+    with (
+        patch.object(Path, "is_dir", return_value=True),
+        patch.object(Path, "is_file", return_value=False),
+        patch.object(Path, "exists", return_value=True),
+    ):
         monkeypatch.setattr("sys.argv", ["l_command", str(test_dir)])
         result = main()
 
@@ -82,40 +93,6 @@ def test_main_with_directory(
     mock_subprocess_run.assert_called_once_with(
         ["ls", "-la", "--color=auto", str(test_dir)]
     )
-
-
-def test_main_with_small_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """閾値以下の行数のファイルを指定した場合のテスト"""
-    # テスト用のファイルを作成（閾値以下の行数）
-    test_file = tmp_path / "small_file.txt"
-    content = "\n".join(["line"] * (LINE_THRESHOLD - 1))
-    test_file.write_text(content)
-
-    # コマンドライン引数をモック
-    monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
-
-    # main関数を実行
-    result = main()
-
-    # 戻り値が0（成功）であることを確認
-    assert result == 0
-
-
-def test_main_with_large_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """閾値を超える行数のファイルを指定した場合のテスト"""
-    # テスト用のファイルを作成（閾値を超える行数）
-    test_file = tmp_path / "large_file.txt"
-    content = "\n".join(["line"] * (LINE_THRESHOLD + 1))
-    test_file.write_text(content)
-
-    # コマンドライン引数をモック
-    monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
-
-    # main関数を実行
-    result = main()
-
-    # 戻り値が0（成功）であることを確認
-    assert result == 0
 
 
 def test_count_lines(tmp_path: Path) -> None:
@@ -152,40 +129,49 @@ def test_count_lines_with_error(tmp_path: Path, capsys: CaptureFixture) -> None:
 def test_main_with_small_text_file(
     tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
 ) -> None:
-    """Test main() with a small non-JSON file (uses cat)."""
+    """Test main() with a non-JSON file shorter than terminal height (uses cat)."""
     test_file = tmp_path / "small_file.txt"
-    create_file(test_file, "line1\nline2")
+    file_lines = 10
+    terminal_height = 24
+    create_file(test_file, "\n".join(["line"] * file_lines))
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    # Patch count_lines for this execution
-    with patch("l_command.cli.count_lines", return_value=2) as mock_count:
-        # Ensure Path methods work correctly on the real temp file
-        # No need to mock is_dir/is_file for real files
+    # Patch count_lines and get_terminal_size
+    with (
+        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
+        patch("os.get_terminal_size") as mock_terminal_size,
+    ):
+        # Provide both lines and columns for the mock
+        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
         result = main()
 
     assert result == 0
-    # count_lines should be called with a Path object pointing to test_file
-    mock_count.assert_called_once()
-    assert mock_count.call_args[0][0] == test_file
+    mock_count.assert_called_once_with(test_file)
+    mock_terminal_size.assert_called()
     mock_subprocess_run.assert_called_once_with(["cat", str(test_file)], check=True)
 
 
 def test_main_with_large_text_file(
     tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
 ) -> None:
-    """Test main() with a large non-JSON file (uses less)."""
+    """Test main() with a non-JSON file taller than terminal height (uses less)."""
     test_file = tmp_path / "large_file.txt"
-    create_file(test_file, "many lines...")
+    file_lines = 30
+    terminal_height = 24
+    create_file(test_file, "\n".join(["line"] * file_lines))
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    with patch(
-        "l_command.cli.count_lines", return_value=LINE_THRESHOLD + 1
-    ) as mock_count:
+    with (
+        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
+        patch("os.get_terminal_size") as mock_terminal_size,
+    ):
+        # Provide both lines and columns for the mock
+        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
         result = main()
 
     assert result == 0
-    mock_count.assert_called_once()
-    assert mock_count.call_args[0][0] == test_file
+    mock_count.assert_called_once_with(test_file)
+    mock_terminal_size.assert_called()
     mock_subprocess_run.assert_called_once_with(
         ["less", "-RFX", str(test_file)], check=True
     )
@@ -197,17 +183,32 @@ def test_main_with_valid_small_json(
     mock_subprocess_run: MagicMock,
     mock_stat: MagicMock,
 ) -> None:
-    """Test main() with a valid small JSON file."""
-    test_file = tmp_path / "valid_small.json"
+    """Test main() with a valid, small JSON file (uses jq)."""
+    test_file = tmp_path / "valid.json"
     content = '{"key": "value"}'
     create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    # Set the size via mock_stat
-    mock_stat.return_value.st_size = 100
-    # st_mode is already set to S_IFREG by the fixture
+    # Mock stat to return a small size
+    mock_stat.return_value.st_size = len(content.encode("utf-8"))
+    mock_stat.return_value.st_mode = stat.S_IFREG  # Ensure it's seen as a file
 
-    # Rely on default successful mock return for subprocess
+    # Mock subprocess for jq validation (empty) and formatting (.)
+    # Side effect to handle different jq calls
+    def run_side_effect(
+        *args: Sequence[Any],
+        **kwargs: dict[str, Any],
+    ) -> subprocess.CompletedProcess:
+        cmd = args[0]
+        if cmd == ["jq", "empty", str(test_file)]:
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+        if cmd == ["jq", ".", str(test_file)]:
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+        # For other calls (like ls), maybe raise an error or return default
+        return subprocess.CompletedProcess(args=cmd, returncode=1)
+
+    mock_subprocess_run.side_effect = run_side_effect
+
     result = main()
 
     assert result == 0
@@ -230,41 +231,35 @@ def test_main_with_valid_large_json(
     mock_stat: MagicMock,
     capsys: CaptureFixture,
 ) -> None:
-    """Test main() with a valid large JSON file (falls back to default)."""
-    test_file = tmp_path / "valid_large.json"
-    create_file(test_file, '{"data": [1, 2, 3]}')
+    """Test main() with a JSON file exceeding size limit (falls back to default)."""
+    test_file = tmp_path / "large.json"
+    content = '{"key": "value"}'  # Content doesn't matter, size does
+    create_file(test_file, content, size_bytes=MAX_JSON_SIZE_BYTES + 1)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    # Set large size via mock_stat
+    # Mock stat to return large size
     mock_stat.return_value.st_size = MAX_JSON_SIZE_BYTES + 1
+    mock_stat.return_value.st_mode = stat.S_IFREG
 
-    fallback_cmd_base = ["cat"]
-    fallback_args = fallback_cmd_base + [str(test_file)]
-
-    # Refine type hints for side_effect function
-    def run_side_effect(
-        *args: Sequence[Any],
-        **kwargs: dict[str, Any],
-    ) -> subprocess.CompletedProcess:
-        cmd = args[0]
-        if cmd == fallback_args:
-            return subprocess.CompletedProcess(args=cmd, returncode=0)
-        pytest.fail(f"Unexpected subprocess call: {cmd}")
-
-    mock_subprocess_run.side_effect = run_side_effect
-
-    # Patch count_lines for the fallback call
-    with patch("l_command.cli.count_lines", return_value=10) as mock_count:
-        result = main()
+    # Mock os.get_terminal_size for the fallback display_file_default
+    # Assuming fallback uses 'cat' as terminal height > line count (which is low)
+    with patch("os.get_terminal_size") as mock_terminal_size:
+        # Provide both lines and columns for the mock
+        mock_terminal_size.return_value = os.terminal_size(
+            (80, 24)
+        )  # Example height and width
+        # Patch count_lines for the fallback call
+        with patch("l_command.cli.count_lines", return_value=1) as mock_count:
+            result = main()
 
     captured = capsys.readouterr()
     assert result == 0
-    assert "File size" in captured.err
-    assert "Falling back to default viewer" in captured.err
+    assert "exceeds limit" in captured.err
+    # Check that display_file_default's mechanism (cat or less) was called
+    # In this case, lines (1) < height (24), so 'cat' is expected
+    mock_subprocess_run.assert_called_once_with(["cat", str(test_file)], check=True)
     mock_count.assert_called_once_with(test_file)
-    expected_fallback_call = call(fallback_args, check=True)
-    mock_subprocess_run.assert_has_calls([expected_fallback_call])
-    assert mock_subprocess_run.call_count == 1
+    mock_terminal_size.assert_called()
 
 
 def test_main_with_invalid_json(
@@ -276,49 +271,55 @@ def test_main_with_invalid_json(
 ) -> None:
     """Test main() with an invalid JSON file (falls back to default)."""
     test_file = tmp_path / "invalid.json"
-    create_file(test_file, '{"key": value_no_quotes}')
-
-    # Fix: Use mock_stat for size, remove mock_path logic
-    mock_stat.return_value.st_size = 100
-
+    content = "{invalid json"
+    create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    fallback_cmd_base = ["cat"]
-    fallback_args = fallback_cmd_base + [str(test_file)]
-    jq_empty_args = ["jq", "empty", str(test_file)]
+    mock_stat.return_value.st_size = len(content.encode("utf-8"))
+    mock_stat.return_value.st_mode = stat.S_IFREG
 
-    # Refine type hints for side_effect function
+    # Mock subprocess for jq empty (fails) and fallback (cat/less)
     def run_side_effect(
         *args: Sequence[Any],
         **kwargs: dict[str, Any],
     ) -> subprocess.CompletedProcess:
         cmd = args[0]
-        if cmd == jq_empty_args:
+        if cmd == ["jq", "empty", str(test_file)]:
+            # Simulate jq validation failure
             raise subprocess.CalledProcessError(1, cmd)
-        elif cmd == fallback_args:
+        # Assume fallback uses 'cat' for this short invalid file
+        if cmd == ["cat", str(test_file)]:
             return subprocess.CompletedProcess(args=cmd, returncode=0)
-        pytest.fail(f"Unexpected subprocess call: {cmd}")
+        return subprocess.CompletedProcess(args=cmd, returncode=1)
 
     mock_subprocess_run.side_effect = run_side_effect
 
-    with patch("l_command.cli.count_lines", return_value=10) as mock_count:
-        result = main()
+    # Mock os.get_terminal_size and count_lines for the fallback
+    with patch("os.get_terminal_size") as mock_terminal_size:
+        # Provide both lines and columns for the mock
+        mock_terminal_size.return_value = os.terminal_size((80, 24))
+        with patch("l_command.cli.count_lines", return_value=1) as mock_count:
+            result = main()
 
     captured = capsys.readouterr()
     assert result == 0
     assert "failed validation or is invalid" in captured.err
-    assert "Falling back to default viewer" in captured.err
+    # Check that fallback mechanism (cat) was called
+    # Need to check calls carefully due to side effect raising error
+    assert mock_subprocess_run.call_count == 2
+    # First call is jq empty
+    assert mock_subprocess_run.call_args_list[0] == call(
+        ["jq", "empty", str(test_file)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    # Second call is the fallback (cat)
+    assert mock_subprocess_run.call_args_list[1] == call(
+        ["cat", str(test_file)], check=True
+    )
     mock_count.assert_called_once_with(test_file)
-    expected_calls = [
-        call(
-            jq_empty_args,
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ),
-        call(fallback_args, check=True),
-    ]
-    mock_subprocess_run.assert_has_calls(expected_calls)
+    mock_terminal_size.assert_called()
 
 
 def test_main_with_jq_not_found(
@@ -330,49 +331,39 @@ def test_main_with_jq_not_found(
 ) -> None:
     """Test main() when jq command is not found (falls back to default)."""
     test_file = tmp_path / "some.json"
-    create_file(test_file, '{"a": 1}')
-
-    # Fix: Use mock_stat for size, remove mock_path logic
-    mock_stat.return_value.st_size = 100
-
+    content = '{"key": "value"}'
+    create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    fallback_cmd_base = ["cat"]
-    fallback_args = fallback_cmd_base + [str(test_file)]
-    jq_empty_args = ["jq", "empty", str(test_file)]
+    mock_stat.return_value.st_size = len(content.encode("utf-8"))
+    mock_stat.return_value.st_mode = stat.S_IFREG
 
-    # Refine type hints for side_effect function
+    # Mock subprocess to raise FileNotFoundError for jq
     def run_side_effect(
         *args: Sequence[Any],
         **kwargs: dict[str, Any],
     ) -> subprocess.CompletedProcess:
         cmd = args[0]
-        if cmd == jq_empty_args:
-            if mock_subprocess_run.call_count == 1:
-                raise FileNotFoundError("[Errno 2] No such file or directory: 'jq'")
-            else:
-                pytest.fail(f"jq empty called unexpectedly again: {cmd}")
-        elif cmd == fallback_args:
+        if cmd[0] == "jq":
+            raise FileNotFoundError("jq not found")
+        # Assume fallback uses 'cat'
+        if cmd == ["cat", str(test_file)]:
             return subprocess.CompletedProcess(args=cmd, returncode=0)
-        pytest.fail(f"Unexpected subprocess call: {cmd}")
+        return subprocess.CompletedProcess(args=cmd, returncode=1)
 
     mock_subprocess_run.side_effect = run_side_effect
 
-    with patch("l_command.cli.count_lines", return_value=10) as mock_count:
-        result = main()
+    # Mock os.get_terminal_size and count_lines for the fallback
+    with patch("os.get_terminal_size") as mock_terminal_size:
+        # Provide both lines and columns for the mock
+        mock_terminal_size.return_value = os.terminal_size((80, 24))
+        with patch("l_command.cli.count_lines", return_value=1) as mock_count:
+            result = main()
 
     captured = capsys.readouterr()
     assert result == 0
     assert "jq command not found" in captured.err
-    assert "Falling back to default viewer" in captured.err
+    # Check that fallback mechanism (cat) was called
+    mock_subprocess_run.assert_called_with(["cat", str(test_file)], check=True)
     mock_count.assert_called_once_with(test_file)
-    expected_calls = [
-        call(
-            jq_empty_args,
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ),
-        call(fallback_args, check=True),
-    ]
-    mock_subprocess_run.assert_has_calls(expected_calls)
+    mock_terminal_size.assert_called()

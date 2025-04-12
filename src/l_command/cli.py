@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from l_command.constants import (
     JSON_CONTENT_CHECK_BYTES,
-    LINE_THRESHOLD,
     MAX_JSON_SIZE_BYTES,
 )
 
@@ -53,9 +53,23 @@ def count_lines(file_path: Path) -> int:
 
 
 def display_file_default(file_path: Path) -> None:
-    """Display file content using cat or less based on line count."""
+    """Display file content using cat or less.
+
+    The choice between cat and less is based on the file's line count
+    and the terminal's height.
+    """
     line_count = count_lines(file_path)
-    command = ["less", "-RFX"] if line_count > LINE_THRESHOLD else ["cat"]
+
+    try:
+        # Get terminal height
+        terminal_height = os.get_terminal_size().lines
+    except OSError:
+        # Fallback if not running in a terminal (e.g., piped)
+        terminal_height = float("inf")  # Effectively always use cat
+
+    # Use less if the file has more lines than the terminal height, otherwise use cat
+    command = ["less", "-RFX"] if line_count > terminal_height else ["cat"]
+
     try:
         subprocess.run([*command, str(file_path)], check=True)
     except FileNotFoundError:
