@@ -235,36 +235,10 @@ l-command/
 
 ## 依存関係管理
 
-`pyproject.toml`の設定例:
+このプロジェクトでは依存関係管理に`uv`を使用しています。
 
-```toml
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "l-command"
-version = "0.1.0"
-description = "Smart file and directory viewer"
-authors = [{name = "Your Name", email = "your.email@example.com"}]
-requires-python = ">=3.8"
-license = {text = "MIT"}
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-]
-dependencies = []
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "ruff>=0.1.0",
-]
-
-[project.scripts]
-l = "l_command.cli:main"
+```bash
+uv sync
 ```
 
 ## パッケージング

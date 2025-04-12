@@ -23,5 +23,6 @@ alwaysApply: true
 
 
 ## コミット時の確認事項
+- テストが通ることを確認する
 - `uv run ruff format`, `uv run ruff check --fix` を事前に行う
-- コミットメッセージは [CONTRIBUTING.md](mdc:CONTRIBUTING.md) に従う。英語にする
+- Commit message MUST be complied to Conventional Commit 1.0.0 and written in English

@@ -1,57 +1,42 @@
 #!/usr/bin/env python3
 import argparse
-import json
 import subprocess
 import sys
 from pathlib import Path
 
-from l_command.constants import JSON_CONTENT_CHECK_BYTES, LINE_THRESHOLD
+from l_command.constants import (
+    JSON_CONTENT_CHECK_BYTES,
+    LINE_THRESHOLD,
+    MAX_JSON_SIZE_BYTES,
+)
 
 
-def is_json_file(file_path: Path) -> bool:
-    """Determine if a file is JSON.
-
-    Args:
-        file_path: Path to the file to be checked.
-
-    Returns:
-        True if the file is JSON, False otherwise.
-    """
-    # Check by extension
+def should_try_jq(file_path: Path) -> bool:
+    """Determine if a file is likely JSON and should be processed with jq."""
+    # Check by extension first
     if file_path.suffix.lower() == ".json":
-        # Return True for empty temporary files with .json extension used in tests
-        if file_path.stat().st_size == 0:
-            return True
-
-        # Also check the content
+        # Treat empty .json files (e.g., temp files in tests) as non-jq targets
+        # to avoid errors with jq empty on empty input.
         try:
-            with file_path.open("r") as f:
-                json.load(f)
-                return True
-        except Exception:
-            # Return False if it cannot be parsed as JSON
-            return False
+            if file_path.stat().st_size == 0:
+                return False
+        except OSError:
+            return False  # Cannot stat, likely doesn't exist or permission error
+        return True
 
-    # Check by content
+    # Check by content if extension doesn't match
     try:
         with file_path.open("rb") as f:
             content_start = f.read(JSON_CONTENT_CHECK_BYTES)
+            if not content_start:
+                return False
             try:
                 content_text = content_start.decode("utf-8").strip()
-                # An empty file is not JSON
-                if not content_text:
-                    return False
-
-                # Check if it starts with { or [
                 if content_text.startswith(("{", "[")):
-                    # Try to parse as JSON
-                    json.loads(content_text)
                     return True
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                # If it cannot be decoded or is invalid JSON
+            except UnicodeDecodeError:
                 pass
-    except Exception:
-        # In case of file read error
+    except OSError:
         pass
 
     return False
@@ -62,9 +47,88 @@ def count_lines(file_path: Path) -> int:
     try:
         with file_path.open("rb") as f:
             return sum(1 for _ in f)
-    except Exception as e:
-        print(f"Error counting lines: {e}")
+    except OSError as e:
+        print(f"Error counting lines: {e}", file=sys.stderr)
         return 0
+
+
+def display_file_default(file_path: Path) -> None:
+    """Display file content using cat or less based on line count."""
+    line_count = count_lines(file_path)
+    command = ["less", "-RFX"] if line_count > LINE_THRESHOLD else ["cat"]
+    try:
+        subprocess.run([*command, str(file_path)], check=True)
+    except FileNotFoundError:
+        # Handle case where cat or less might be missing (highly unlikely)
+        print(f"Error: Required command '{command[0]}' not found.", file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        # This might happen if cat/less fails for some reason
+        print(f"Error displaying file with {command[0]}: {e}", file=sys.stderr)
+    except OSError as e:
+        print(f"Error accessing file for default display: {e}", file=sys.stderr)
+
+
+def display_json_with_jq(file_path: Path) -> None:
+    """Attempt to display a JSON file using jq, with fallbacks."""
+    try:
+        file_size = file_path.stat().st_size
+        if file_size == 0:
+            # jq empty fails on empty files, treat as non-JSON for display
+            print("(Empty file)")  # Indicate it is empty
+            return
+
+        if file_size > MAX_JSON_SIZE_BYTES:
+            print(
+                f"File size ({file_size} bytes) exceeds limit "
+                f"({MAX_JSON_SIZE_BYTES} bytes). "
+                f"Falling back to default viewer.",
+                file=sys.stderr,
+            )
+            display_file_default(file_path)
+            return
+
+        # Validate JSON using jq empty
+        try:
+            subprocess.run(
+                ["jq", "empty", str(file_path)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            print(
+                "jq command not found. Falling back to default viewer.", file=sys.stderr
+            )
+            display_file_default(file_path)
+            return
+        except subprocess.CalledProcessError:
+            print(
+                "File identified as JSON but failed validation or is invalid. "
+                "Falling back to default viewer.",
+                file=sys.stderr,
+            )
+            display_file_default(file_path)
+            return
+        except OSError as e:
+            print(f"Error running jq empty: {e}", file=sys.stderr)
+            display_file_default(file_path)
+            return
+
+        # If validation passes, display formatted JSON with jq .
+        try:
+            subprocess.run(["jq", ".", str(file_path)], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error displaying JSON with jq: {e}", file=sys.stderr)
+            # Fallback even if formatting fails after validation
+            display_file_default(file_path)
+        except OSError as e:
+            print(f"Error running jq .: {e}", file=sys.stderr)
+            display_file_default(file_path)
+
+    except OSError as e:
+        print(f"Error accessing file stats for JSON processing: {e}", file=sys.stderr)
+        # Fallback if we can't even get the file size
+        display_file_default(file_path)
 
 
 def main() -> int:
@@ -77,24 +141,31 @@ def main() -> int:
 
     path = Path(args.path)
 
-    # Check if path exists
     if not path.exists():
-        print(f"Error: Path not found: {path}")
+        print(f"Error: Path not found: {path}", file=sys.stderr)
         return 1
 
     try:
-        # If it's a directory
         if path.is_dir():
             subprocess.run(["ls", "-la", "--color=auto", str(path)])
-        # If it's a file
-        else:
-            line_count = count_lines(path)
-            if line_count <= LINE_THRESHOLD:
-                subprocess.run(["cat", str(path)])
+        elif path.is_file():
+            if should_try_jq(path):
+                display_json_with_jq(path)
             else:
-                subprocess.run(["less", "-RFX", str(path)])
+                display_file_default(path)
+        else:
+            # Handle other path types like sockets, fifos, etc.
+            print(f"Path is not a file or directory: {path}", file=sys.stderr)
+            # Optionally run ls -la to show what it is
+            subprocess.run(["ls", "-lad", str(path)])
+
     except subprocess.CalledProcessError as e:
-        print(f"Error: {e}")
+        # Catch errors from ls command
+        print(f"Error executing command: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        # General unexpected errors during processing
+        print(f"An unexpected error occurred: {e}", file=sys.stderr)
         return 1
 
     return 0

@@ -1,68 +1,91 @@
 import tempfile
 from pathlib import Path
 
-from l_command.cli import is_json_file
+from l_command.cli import should_try_jq
 
 
-def test_is_json_file_by_extension() -> None:
-    """Test JSON file detection by extension."""
-    # File with .json extension
+def test_should_try_jq_by_extension() -> None:
+    """Test should_try_jq detection by extension."""
+    # File with .json extension (non-empty)
+    with tempfile.NamedTemporaryFile(suffix=".json", mode="w") as tmp:
+        tmp.write("{}")  # Write minimal content to make it non-empty
+        tmp.flush()
+        path = Path(tmp.name)
+        assert should_try_jq(path) is True
+
+    # File with .JSON extension (uppercase, non-empty)
+    with tempfile.NamedTemporaryFile(suffix=".JSON", mode="w") as tmp:
+        tmp.write("[]")  # Write minimal content
+        tmp.flush()
+        path = Path(tmp.name)
+        assert should_try_jq(path) is True
+
+    # Empty file with .json extension
     with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
         path = Path(tmp.name)
-        assert is_json_file(path) is True
-
-    # File with .JSON extension (uppercase)
-    with tempfile.NamedTemporaryFile(suffix=".JSON") as tmp:
-        path = Path(tmp.name)
-        assert is_json_file(path) is True
+        assert should_try_jq(path) is False  # Empty .json should return False
 
     # File with non-JSON extension
     with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
         path = Path(tmp.name)
-        assert is_json_file(path) is False
+        assert should_try_jq(path) is False
 
 
-def test_is_json_file_by_content() -> None:
-    """Test JSON file detection by content."""
+def test_should_try_jq_by_content() -> None:
+    """Test should_try_jq detection by content for non-json extensions."""
     # JSON object content
     with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
-        tmp.write(b'{"key": "value"}')
+        tmp.write(b' { "key": "value" } ')  # Add spaces to test strip()
         tmp.flush()
         path = Path(tmp.name)
-        assert is_json_file(path) is True
+        assert should_try_jq(path) is True
 
     # JSON array content
     with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
-        tmp.write(b"[1, 2, 3]")
+        tmp.write(b" [1, 2, 3] ")
         tmp.flush()
         path = Path(tmp.name)
-        assert is_json_file(path) is True
+        assert should_try_jq(path) is True
+
+    # Non-JSON content starting with { or [
+    with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
+        tmp.write(b"{not really json")
+        tmp.flush()
+        path = Path(tmp.name)
+        assert should_try_jq(path) is True  # Still matches based on start char
 
     # Non-JSON content
     with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
         tmp.write(b"This is not JSON")
         tmp.flush()
         path = Path(tmp.name)
-        assert is_json_file(path) is False
+        assert should_try_jq(path) is False
 
     # Empty file
     with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
         path = Path(tmp.name)
-        assert is_json_file(path) is False
+        assert should_try_jq(path) is False
 
 
-def test_is_json_file_with_test_files() -> None:
+def test_should_try_jq_with_test_files() -> None:
     """Test with prepared test files."""
     test_files_dir = Path(__file__).parent / "test_files"
 
-    # Valid JSON file
+    # Valid JSON file (assume non-empty)
     valid_json = test_files_dir / "valid.json"
-    assert is_json_file(valid_json) is True
+    assert should_try_jq(valid_json) is True
 
-    # Invalid JSON file (has JSON-like format but invalid)
+    # Invalid JSON file (has .json extension, assume non-empty)
     invalid_json = test_files_dir / "invalid.json"
-    assert is_json_file(invalid_json) is False
+    # should_try_jq returns True based on extension and non-zero size.
+    # The actual validation happens later.
+    assert should_try_jq(invalid_json) is True
 
     # Non-JSON file
     not_json = test_files_dir / "not_json.txt"
-    assert is_json_file(not_json) is False
+    assert should_try_jq(not_json) is False
+
+    # Empty file with json extension
+    empty_json = test_files_dir / "empty.json"  # Assuming this exists
+    if empty_json.exists():  # Add check in case it doesn't
+        assert should_try_jq(empty_json) is False
