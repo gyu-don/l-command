@@ -13,12 +13,13 @@ alwaysApply: true
 - To fix automatically, you may run `uv run ruff format .` and `uv run ruff check --fix .`
 - To run Python commands, use `uv run`.
 - You must follow [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
+- タスクはこまめに区切ります。多くのことを行っていると感じたら、一度コミットしてタスクを区切ることを提案してください
 
 
 ## 細かいコーディング規約類
-- os.pathのかわりにpathlibを使ってください
-- Pythonパッケージは uv add <パッケージ名> により追加します。uv pipは使用しません
-    - 開発にしか用いないパッケージはuv add --dev <パッケージ名> により追加します
+- Use `pathlib` insteads `os.path`
+- Use `uv add <package-name>` to add package. Do not use `uv pip`
+    - Use `uv add --dev <package-name>` to add package for development
 - `git` コマンドのviewerに `less` が使われていることがよくあります。 `| cat` でそれを避けることができます
 
 
@@ -26,3 +27,4 @@ alwaysApply: true
 - テストが通ることを確認する
 - `uv run ruff format`, `uv run ruff check --fix` を事前に行う
 - Commit message MUST be complied to Conventional Commit 1.0.0 and written in English
+- To write multiple-line commit message, you may want to use heredoc. `git commit -F - <<EOF`
