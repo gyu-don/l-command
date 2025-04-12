@@ -1,6 +1,7 @@
 import os
 import stat
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -141,7 +142,6 @@ def test_main_with_small_text_file(
         patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
         patch("os.get_terminal_size") as mock_terminal_size,
     ):
-        # Provide both lines and columns for the mock
         mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
         result = main()
 
@@ -161,11 +161,11 @@ def test_main_with_large_text_file(
     create_file(test_file, "\n".join(["line"] * file_lines))
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
+    # Use parenthesis syntax for multiple patches
     with (
         patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
         patch("os.get_terminal_size") as mock_terminal_size,
     ):
-        # Provide both lines and columns for the mock
         mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
         result = main()
 
@@ -183,45 +183,164 @@ def test_main_with_valid_small_json(
     mock_subprocess_run: MagicMock,
     mock_stat: MagicMock,
 ) -> None:
-    """Test main() with a valid, small JSON file (uses jq)."""
-    test_file = tmp_path / "valid.json"
+    """Test main() with a valid, small JSON file (uses direct jq)."""
+    test_file = tmp_path / "valid_small.json"
     content = '{"key": "value"}'
+    file_lines = 1  # Define lines <= terminal height
+    terminal_height = 24
     create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    # Mock stat to return a small size
     mock_stat.return_value.st_size = len(content.encode("utf-8"))
-    mock_stat.return_value.st_mode = stat.S_IFREG  # Ensure it's seen as a file
+    mock_stat.return_value.st_mode = stat.S_IFREG
 
-    # Mock subprocess for jq validation (empty) and formatting (.)
-    # Side effect to handle different jq calls
-    def run_side_effect(
-        *args: Sequence[Any],
-        **kwargs: dict[str, Any],
-    ) -> subprocess.CompletedProcess:
-        cmd = args[0]
-        if cmd == ["jq", "empty", str(test_file)]:
-            return subprocess.CompletedProcess(args=cmd, returncode=0)
-        if cmd == ["jq", ".", str(test_file)]:
-            return subprocess.CompletedProcess(args=cmd, returncode=0)
-        # For other calls (like ls), maybe raise an error or return default
-        return subprocess.CompletedProcess(args=cmd, returncode=1)
+    # Use parenthesis syntax for multiple patches
+    with (
+        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
+        patch("os.get_terminal_size") as mock_terminal_size,
+    ):
+        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
 
-    mock_subprocess_run.side_effect = run_side_effect
+        # Mock subprocess.run side effect for 'jq empty' and 'jq .' calls
+        def run_side_effect(
+            *args: Sequence[Any], **kwargs: dict[str, Any]
+        ) -> subprocess.CompletedProcess:
+            cmd = args[0]
+            if cmd == ["jq", "empty", str(test_file)]:
+                return subprocess.CompletedProcess(args=cmd, returncode=0)
+            if cmd == ["jq", ".", str(test_file)]:
+                return subprocess.CompletedProcess(args=cmd, returncode=0)
+            print(f"Unexpected subprocess.run call: {cmd}", file=sys.stderr)
+            return subprocess.CompletedProcess(args=cmd, returncode=1)
 
-    result = main()
+        mock_subprocess_run.side_effect = run_side_effect
+
+        result = main()
 
     assert result == 0
-    expected_calls = [
+    mock_count.assert_called_once_with(test_file)
+    mock_terminal_size.assert_called()  # Verify terminal size was checked
+
+    # Verify the calls to subprocess.run
+    expected_run_calls = [
         call(
             ["jq", "empty", str(test_file)],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ),
-        call(["jq", ".", str(test_file)], check=True),
+        call(["jq", ".", str(test_file)], check=True),  # Direct call, no pipe
     ]
-    mock_subprocess_run.assert_has_calls(expected_calls)
+    mock_subprocess_run.assert_has_calls(expected_run_calls)
+
+
+def test_main_with_valid_large_json_uses_less(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    mock_subprocess_run: MagicMock,  # Now used for 'jq empty' AND 'less -R'
+    mock_stat: MagicMock,
+    capsys: CaptureFixture,
+) -> None:
+    """Test main() with a valid JSON taller than terminal (uses jq | less)."""
+    test_file = tmp_path / "valid_large.json"
+    content = '{\n"a": [' + ",\n".join([f'"{i}"' for i in range(50)]) + "]\n}"
+    file_lines = 52
+    terminal_height = 24
+    create_file(test_file, content)
+    monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
+
+    mock_stat.return_value.st_size = len(content.encode("utf-8"))
+    mock_stat.return_value.st_mode = stat.S_IFREG
+
+    # Prepare mock objects for Popen (jq) and Run (less)
+    mock_jq_proc = MagicMock(spec=subprocess.Popen)
+    mock_jq_proc.stdout = MagicMock()
+    mock_jq_proc.wait.return_value = 0  # Ensure jq mock process exits successfully
+
+    # Setup side effects for Popen (jq) and Run (jq empty, less)
+    def popen_side_effect(*args: Sequence[Any], **kwargs: dict[str, Any]) -> MagicMock:
+        cmd = args[0]
+        # Check for the 'jq --color-output .' call
+        if cmd == ["jq", "--color-output", ".", str(test_file)]:
+            assert kwargs.get("stdout") == subprocess.PIPE
+            assert kwargs.get("stderr") == subprocess.PIPE  # Check stderr is piped too
+            return mock_jq_proc
+        raise ValueError(f"Unexpected Popen call: {cmd} with kwargs {kwargs}")
+
+    def run_side_effect(
+        *args: Sequence[Any], **kwargs: dict[str, Any]
+    ) -> subprocess.CompletedProcess:
+        cmd = args[0]
+        # Check for 'jq empty' call
+        if cmd == ["jq", "empty", str(test_file)]:
+            assert kwargs.get("check") is True
+            assert kwargs.get("stdout") == subprocess.DEVNULL
+            assert kwargs.get("stderr") == subprocess.DEVNULL
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+        # Check for 'less -R' call
+        if cmd == ["less", "-R"]:
+            assert (
+                kwargs.get("stdin") == mock_jq_proc.stdout
+            )  # Check stdin is jq's stdout
+            assert kwargs.get("check") is True
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+        # Any other call to subprocess.run is unexpected in this flow
+        print(
+            f"Unexpected subprocess.run call: {cmd} with kwargs {kwargs}",
+            file=sys.stderr,
+        )
+        # Return non-zero to indicate failure if unexpected call occurs
+        return subprocess.CompletedProcess(args=cmd, returncode=1)
+
+    mock_subprocess_run.side_effect = run_side_effect
+
+    # Use parenthesis syntax for multiple patches
+    with (
+        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
+        patch("os.get_terminal_size") as mock_terminal_size,
+        patch(
+            "subprocess.Popen", side_effect=popen_side_effect
+        ) as mock_popen,  # Patch Popen here
+    ):
+        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
+        result = main()
+
+    # Assertions remain largely the same, but check mock_subprocess_run calls now
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.err == ""
+
+    mock_count.assert_called_once_with(test_file)
+    mock_terminal_size.assert_called()
+
+    # Verify 'jq --color-output .' was called via Popen
+    mock_popen.assert_called_once_with(
+        ["jq", "--color-output", ".", str(test_file)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    # Verify 'jq empty' and 'less -R' were called via Run
+    expected_run_calls = [
+        call(
+            ["jq", "empty", str(test_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ),
+        call(
+            ["less", "-R"],
+            stdin=mock_jq_proc.stdout,
+            check=True,
+        ),
+    ]
+    mock_subprocess_run.assert_has_calls(expected_run_calls)
+    assert mock_subprocess_run.call_count == 2  # Ensure no other run calls
+
+    # Verify pipe closing and waiting logic
+    mock_jq_proc.stdout.close.assert_called_once()
+    # mock_less_proc is no longer used, less is called via run
+    mock_jq_proc.wait.assert_called_once()
 
 
 def test_main_with_valid_large_json(
@@ -232,8 +351,8 @@ def test_main_with_valid_large_json(
     capsys: CaptureFixture,
 ) -> None:
     """Test main() with a JSON file exceeding size limit (falls back to default)."""
-    test_file = tmp_path / "large.json"
-    content = '{"key": "value"}'  # Content doesn't matter, size does
+    test_file = tmp_path / "large_exceed.json"
+    content = '{"key": "value"}'
     create_file(test_file, content, size_bytes=MAX_JSON_SIZE_BYTES + 1)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
@@ -241,22 +360,39 @@ def test_main_with_valid_large_json(
     mock_stat.return_value.st_size = MAX_JSON_SIZE_BYTES + 1
     mock_stat.return_value.st_mode = stat.S_IFREG
 
+    # Define fallback_lines and terminal_height HERE
+    fallback_lines = 5
+    terminal_height = 24
     # Mock os.get_terminal_size for the fallback display_file_default
-    # Assuming fallback uses 'cat' as terminal height > line count (which is low)
-    with patch("os.get_terminal_size") as mock_terminal_size:
-        # Provide both lines and columns for the mock
-        mock_terminal_size.return_value = os.terminal_size(
-            (80, 24)
-        )  # Example height and width
-        # Patch count_lines for the fallback call
-        with patch("l_command.cli.count_lines", return_value=1) as mock_count:
-            result = main()
+    # Use parenthesis syntax for multiple patches
+    with (
+        patch("os.get_terminal_size") as mock_terminal_size,
+        patch("l_command.cli.count_lines", return_value=fallback_lines) as mock_count,
+    ):
+        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
+
+        # Mock subprocess.run for the fallback 'cat' call
+        def run_side_effect(
+            *args: Sequence[Any], **kwargs: dict[str, Any]
+        ) -> subprocess.CompletedProcess:
+            cmd = args[0]
+            if cmd == ["cat", str(test_file)]:
+                return subprocess.CompletedProcess(args=cmd, returncode=0)
+            print(
+                f"Unexpected subprocess.run call in size fallback: {cmd}",
+                file=sys.stderr,
+            )
+            return subprocess.CompletedProcess(args=cmd, returncode=1)
+
+        mock_subprocess_run.side_effect = run_side_effect
+
+        result = main()
 
     captured = capsys.readouterr()
     assert result == 0
     assert "exceeds limit" in captured.err
     # Check that display_file_default's mechanism (cat or less) was called
-    # In this case, lines (1) < height (24), so 'cat' is expected
+    # In this case, lines (5) < height (24), so 'cat' is expected
     mock_subprocess_run.assert_called_once_with(["cat", str(test_file)], check=True)
     mock_count.assert_called_once_with(test_file)
     mock_terminal_size.assert_called()
@@ -295,11 +431,13 @@ def test_main_with_invalid_json(
     mock_subprocess_run.side_effect = run_side_effect
 
     # Mock os.get_terminal_size and count_lines for the fallback
-    with patch("os.get_terminal_size") as mock_terminal_size:
+    with (
+        patch("os.get_terminal_size") as mock_terminal_size,
+        patch("l_command.cli.count_lines", return_value=1) as mock_count,
+    ):
         # Provide both lines and columns for the mock
         mock_terminal_size.return_value = os.terminal_size((80, 24))
-        with patch("l_command.cli.count_lines", return_value=1) as mock_count:
-            result = main()
+        result = main()
 
     captured = capsys.readouterr()
     assert result == 0
@@ -354,11 +492,13 @@ def test_main_with_jq_not_found(
     mock_subprocess_run.side_effect = run_side_effect
 
     # Mock os.get_terminal_size and count_lines for the fallback
-    with patch("os.get_terminal_size") as mock_terminal_size:
+    with (
+        patch("os.get_terminal_size") as mock_terminal_size,
+        patch("l_command.cli.count_lines", return_value=1) as mock_count,
+    ):
         # Provide both lines and columns for the mock
         mock_terminal_size.return_value = os.terminal_size((80, 24))
-        with patch("l_command.cli.count_lines", return_value=1) as mock_count:
-            result = main()
+        result = main()
 
     captured = capsys.readouterr()
     assert result == 0
