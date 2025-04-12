@@ -2,8 +2,11 @@
 
 You MAY create, edit and refer these documents if you necessary.
 
-## diary.md
-You SHOULD write summary of your task and what you do.
-
 ## implementation-plan.md
 Our implementation plan.
+
+## developer-guide.md
+開発者向けのガイドライン、アーキテクチャ説明、および機能拡張方法。
+
+## implementation-examples.md
+新機能実装のための具体的なコード例。
