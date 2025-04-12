@@ -128,15 +128,45 @@ def display_json_with_jq(file_path: Path) -> None:
             display_file_default(file_path)
             return
 
-        # If validation passes, display formatted JSON with jq .
+        # Check line count to determine whether to use less
+        line_count = count_lines(file_path)
+
+        # Get terminal height for comparison (same as in display_file_default)
         try:
-            subprocess.run(["jq", ".", str(file_path)], check=True)
+            terminal_height = os.get_terminal_size().lines
+        except OSError:
+            # Fallback if not running in a terminal (e.g., piped)
+            terminal_height = float("inf")  # Effectively always use direct output
+
+        # If validation passes, display formatted JSON with jq
+        try:
+            if line_count > terminal_height:
+                # For JSON files taller than terminal, use less with color
+                jq_process = subprocess.Popen(
+                    ["jq", "--color-output", ".", str(file_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                subprocess.run(
+                    ["less", "-R"],  # -R preserves color codes
+                    stdin=jq_process.stdout,
+                    check=True,
+                )
+                jq_process.stdout.close()
+                # Check if jq process failed
+                jq_retcode = jq_process.wait()
+                if jq_retcode != 0:
+                    print(f"jq process exited with code {jq_retcode}", file=sys.stderr)
+                    display_file_default(file_path)
+            else:
+                # For small JSON files, display directly
+                subprocess.run(["jq", ".", str(file_path)], check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error displaying JSON with jq: {e}", file=sys.stderr)
             # Fallback even if formatting fails after validation
             display_file_default(file_path)
         except OSError as e:
-            print(f"Error running jq .: {e}", file=sys.stderr)
+            print(f"Error running jq command: {e}", file=sys.stderr)
             display_file_default(file_path)
 
     except OSError as e:
