@@ -6,13 +6,14 @@ alwaysApply: true
 
 # Your rule content
 
+- The keywords "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this and other related documents within this project document are to be interpreted as described in RFC 2119
 - You can @ files here
 - You can use markdown but dont have to
 - `.cursordocs` directory is document for you. Refer [index.md](mdc:.cursordocs/index.md)
-- Commit, code, comments, docstrings should be written in English. Commit rule is also described in [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
+- Code, comments, docstrings SHOULD be written in English
 - To fix automatically, you may run `uv run ruff format .` and `uv run ruff check --fix .`
 - To run Python commands, use `uv run`.
-- You must follow [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
+- You SHOULD follow [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
 - タスクはこまめに区切ります。多くのことを行っていると感じたら、一度コミットしてタスクを区切ることを提案してください
 
 
@@ -25,6 +26,11 @@ alwaysApply: true
 
 ## コミット時の確認事項
 - テストが通ることを確認する
-- `uv run ruff format`, `uv run ruff check --fix` を事前に行う
+- ファイルを `git add <file-name> ...` でステージしてから `uv run pre-commit run` を事前に行う
+    - コマンド例: `git add <file-name> ... && uv run pre-commit run`
+    - ステージした差分に対して検査が行われる。また、Failした場合、自動修正がされる場合があり、自動修正されたものはステージされていない
+        - Failの内容を確認し、必要に応じて `git status` も確認する
+        - 修正を行った後、再度 `git add <file-name> ...` から実行する
+    - `uv run pre-commit run` が通ったら、コミットを行う
 - Commit message MUST be complied to Conventional Commit 1.0.0 and written in English
-- To write multiple-line commit message, you may want to use heredoc. `git commit -F - <<EOF`
+    - To write multiple-line commit message, you may want to use heredoc. `git commit -F - <<EOF`
