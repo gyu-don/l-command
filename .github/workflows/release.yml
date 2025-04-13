@@ -1,31 +1,67 @@
-name: Publish Python package to PyPI
+name: Publish Python package to PyPI and TestPyPI
 
 on:
   release:
     types: [published]
 
 jobs:
-  pypi-publish:
-    name: Upload release to PyPI
+  build:
+    name: Build package
     runs-on: ubuntu-latest
-    environment: pypi # Optional: specify the environment defined in PyPI Trusted Publisher settings
-    permissions:
-      id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv and set up Python
-        uses: astral-sh/setup-uv@v1 # Use the official setup-uv action
+        uses: astral-sh/setup-uv@v5
 
       - name: Install build dependencies
-        run: uv pip install hatch # Install hatch using uv pip
+        run: uv pip install hatch
 
       - name: Build package
         run: hatch build
 
+      - name: Store distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-testpypi:
+    name: Upload release to TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # Needed for TestPyPI Trusted Publishing
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish package distributions to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Upload release to PyPI (requires approval)
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    environment: # Define the environment for approval
+      name: pypi
+      url: https://pypi.org/p/l-command # Optional: Link to the PyPI project page
+    permissions:
+      id-token: write # Needed for PyPI Trusted Publishing
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # No username/password or API token needed when using Trusted Publishing
-        # with:
-        #   repository-url: https://test.pypi.org/legacy/ # Uncomment to publish to TestPyPI
+        # Publishes to PyPI by default
