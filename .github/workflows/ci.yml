@@ -16,18 +16,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    - name: Install uv and set up Python ${{ matrix.python-version }}
+      uses: astral-sh/setup-uv@v1
       with:
         python-version: ${{ matrix.python-version }}
-
-    - name: Install uv
-      run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install dependencies
-      run: uv sync
+      run: uv sync --dev
 
     - name: Run tests
       run: uv run pytest tests/ --cov=src --cov-report=xml

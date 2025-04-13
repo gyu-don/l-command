@@ -1,0 +1,31 @@
+name: Publish Python package to PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi # Optional: specify the environment defined in PyPI Trusted Publisher settings
+    permissions:
+      id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and set up Python
+        uses: astral-sh/setup-uv@v1 # Use the official setup-uv action
+
+      - name: Install build dependencies
+        run: uv pip install hatch # Install hatch using uv pip
+
+      - name: Build package
+        run: hatch build
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No username/password or API token needed when using Trusted Publishing
+        # with:
+        #   repository-url: https://test.pypi.org/legacy/ # Uncomment to publish to TestPyPI

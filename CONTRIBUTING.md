@@ -14,8 +14,8 @@
 ### 開発環境構築
 ```bash
 # リポジトリのクローン
-git clone https://github.com/your-username/the-l-command.git
-cd the-l-command
+git clone https://github.com/your-username/l-command.git
+cd l-command
 
 # uvのインストール（まだ持っていない場合）
 curl -LsSf https://astral.sh/uv/install.sh | sh

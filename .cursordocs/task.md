@@ -1,55 +1,31 @@
-# JSON処理機能実装のTODO
+# PyPI 配布に向けたタスクリスト
 
-## 目的
-`l` コマンドでJSONファイルを処理する機能を実装する。jqを使ってJSON形式で表示し、ユーザーエクスペリエンスを向上させる。
+## あなたが行うべきこと (MUST)
 
-## 要件
+-   [x] PyPI ([https://pypi.org/](https://pypi.org/)) にアカウントを作成する
+-   [x] `pyproject.toml` の `project.urls` のプレースホルダー (`https://github.com/gyu-don/l-command`) を実際のURLに更新する
+-   [x] プロジェクトのバージョン (`pyproject.toml` の `version`) が適切か確認する (必要であれば更新する)
+-   [x] `README.md` の内容を確認し、PyPIで表示されるのに適しているか確認する
+-   [x] `LICENSE` ファイルの内容を確認する (`pyproject.toml` で `license = {text = "Apache-2.0"}` と指定していますが、実ファイルも確認してください)
+-   [x] リリース前にテストを実行し、パスすることを確認する (`uv run pytest`)
+-   [ ] `git tag` を使ってリリースバージョンに対応するタグを作成する (例: `git tag v0.1.0`)
+-   [ ] タグをリモートリポジトリにプッシュする (例: `git push origin v0.1.0`)
+-   [x] PyPIにアップロードするためのツール (`twine` など) をインストールする (`uv add --dev twine`)
+-   [x] ビルドコマンドを実行して配布物 (`.whl`, `.tar.gz`) を作成する (`uv run hatch build`)
+-   [x] 作成された配布物を確認する (`dist/` ディレクトリ以下)
+-   [ ] `twine` を使ってTestPyPIにアップロードし、インストール可能かテストする (推奨)
+    -   `uv run twine upload --repository testpypi dist/*`
+    -   TestPyPIからインストールしてみる: `pip install --index-url https://test.pypi.org/simple/ --no-deps l-command`
+-   [ ] `twine` を使ってPyPIにアップロードする
+    -   `uv run twine upload dist/*`
 
-### 基本機能
-- JSONファイルを検出する方法を実装
-  - ファイル拡張子（.json）による判定
-  - ファイル内容の先頭部分を読み込んでJSON形式かどうかを判定
+## Cursorが行うこと (Done by Cursor)
 
-### jqによる表示機能
-- `jq '.'` を使用してJSON形式で整形・カラー表示
-- 少し長いJSONの場合（例：100行以上）は`less -R`にパイプして表示
-  - カラー設定（`-C`や`--color-output`オプション）を引き継ぐよう実装
-  - lessの設定（`LESS`環境変数）を適切に設定
+-   [x] `pyproject.toml` に `project.urls`, `keywords`, 追加の `classifiers` を追記
 
-### フォールバックメカニズム
-- 以下の場合は通常のファイル表示処理（cat/less）にフォールバック
-  - JSONファイルが非常に大きい場合（例：1MB以上）
-  - jqの処理時間が遅くなりうる場合（深いネストや複雑な構造）
-  - JSONが不正な形式で`jq empty`でのバリデーションが失敗する場合
+## Optionalで行ってもいいこと (OPTIONAL)
 
-### 最適化
-- `jq empty`を使用して高速にJSON構文チェック
-- 大きなJSONファイルの場合、最初の部分だけを表示（`jq '.[:10]'`など）
-- JSONの構造に応じた表示方法の最適化
-
-## テスト計画
-- 様々なサイズと複雑さのJSONファイルに対するテストケース作成
-  - 小さなJSONファイル（数行）
-  - 中程度のJSONファイル（~100行）
-  - 大きなJSONファイル（1MB以上）
-  - 不正な形式のJSONファイル
-- モックを使ったユニットテスト
-  - jqコマンドの実行をモック化
-  - ファイルサイズ判定処理のテスト
-- 統合テスト
-  - 実際のJSONファイルを使った表示テスト
-  - パフォーマンステスト
-
-## 実装ステップ
-1. JSONファイル検出機能の実装
-2. jqを使った基本表示機能の実装
-3. lessへのパイプとカラー設定の維持機能の実装
-4. フォールバックメカニズムの実装
-5. テストケースの作成と実行
-6. エッジケースの対応とバグ修正
-
-## 注意事項
-- jqコマンドが存在しない環境での適切なフォールバック処理
-- 非常に大きなJSONファイル処理時のメモリ使用量の考慮
-- jqコマンドのエラーハンドリング
-- カラー設定の環境依存性への対応
+-   [ ] `CONTRIBUTING.md` や `CODE_OF_CONDUCT.md` などのドキュメントを追加する
+-   [ ] Read the Docs ([https://readthedocs.org/](https://readthedocs.org/)) などでドキュメントサイトを構築し、`project.urls.Documentation` に設定する
+-   [ ] GitHub Actionsなどでリリースプロセスを自動化する (タグがプッシュされたら自動でPyPIにアップロードするなど)
+-   [ ] `setuptools_scm` や `hatch-vcs` を導入して、Gitタグから自動でバージョンを決定するようにする (手動でのバージョン更新の手間が省けます)

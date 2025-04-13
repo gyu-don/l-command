@@ -10,12 +10,22 @@ authors = [{name = "gyu-don", email = "takumi.kt@gmail.com"}]
 requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 readme = "README.md"
+keywords = ["cli", "ls", "file-viewer", "directory-viewer"]
 classifiers = [
+    "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: System :: Filesystems",
+    "Topic :: Utilities",
 ]
 dependencies = []
+
+[project.urls]
+"Homepage" = "https://github.com/gyu-don/l-command"
+"Repository" = "https://github.com/gyu-don/l-command"
 
 [project.scripts]
 l = "l_command.cli:main"
@@ -40,6 +50,14 @@ line-ending = "auto"
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.hatch.build]
+include = [
+    "src/l_command/**",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml"
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/l_command"]
 
@@ -57,4 +75,5 @@ dev = [
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
     "pre-commit>=4.2.0",
+    "twine>=6.1.0",
 ]
