@@ -73,6 +73,7 @@ pre-commit-install = "pre-commit install"
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "pytest-mock>=3.14.0",
     "ruff>=0.1.0",
     "pre-commit>=4.2.0",
     "twine>=6.1.0",
