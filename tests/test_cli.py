@@ -283,6 +283,327 @@ def test_directory_handler_large_directory(
         second_process.wait.assert_called_once()
 
 
+def test_default_file_handler_small_file(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test DefaultFileHandler with a small file (uses cat)."""
+    from l_command.handlers.default import DefaultFileHandler
+
+    # Create a test file
+    test_file = tmp_path / "small_file.txt"
+    create_file(test_file, "\n".join(["line"] * 10))  # 10 lines
+
+    # Mock subprocess.run and os.get_terminal_size
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("os.get_terminal_size") as mock_terminal_size,
+    ):
+        # Configure terminal size to be larger than file
+        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+
+        # Mock count_lines directly in the module where it's used
+        with patch(
+            "l_command.handlers.default.count_lines", return_value=10
+        ) as mock_count_lines:
+            # Call the handler
+            DefaultFileHandler.handle(test_file)
+
+            # Verify count_lines was called
+            mock_count_lines.assert_called_once_with(test_file)
+
+        # Verify subprocess.run was called with cat
+        mock_run.assert_called_once_with(
+            ["cat", str(test_file)],
+            check=True,
+        )
+
+
+def test_default_file_handler_large_file(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test DefaultFileHandler with a large file (uses less)."""
+    from l_command.handlers.default import DefaultFileHandler
+
+    # Create a test file
+    test_file = tmp_path / "large_file.txt"
+    create_file(test_file, "\n".join(["line"] * 50))  # 50 lines
+
+    # Mock subprocess.run and os.get_terminal_size
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("os.get_terminal_size") as mock_terminal_size,
+    ):
+        # Configure terminal size to be smaller than file
+        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+
+        # Mock count_lines directly in the module where it's used
+        with patch(
+            "l_command.handlers.default.count_lines", return_value=50
+        ) as mock_count_lines:
+            # Call the handler
+            DefaultFileHandler.handle(test_file)
+
+            # Verify count_lines was called
+            mock_count_lines.assert_called_once_with(test_file)
+
+        # Verify subprocess.run was called with less
+        mock_run.assert_called_once_with(
+            ["less", "-RFX", str(test_file)],
+            check=True,
+        )
+
+
+def test_json_handler_can_handle(tmp_path: Path) -> None:
+    """Test JsonHandler.can_handle method."""
+    from l_command.handlers.json import JsonHandler
+
+    # Test with .json extension
+    json_file = tmp_path / "test.json"
+    create_file(json_file, '{"key": "value"}')
+    assert JsonHandler.can_handle(json_file) is True
+
+    # Test with JSON content but no .json extension
+    json_content_file = tmp_path / "test.txt"
+    create_file(json_content_file, '{"key": "value"}')
+    assert JsonHandler.can_handle(json_content_file) is True
+
+    # Test with non-JSON content
+    non_json_file = tmp_path / "non_json.txt"
+    create_file(non_json_file, "This is not JSON")
+    assert JsonHandler.can_handle(non_json_file) is False
+
+    # Test with empty file
+    empty_file = tmp_path / "empty.json"
+    create_file(empty_file, "")
+    assert JsonHandler.can_handle(empty_file) is False
+
+    # Test with directory
+    dir_path = tmp_path / "test_dir"
+    dir_path.mkdir()
+    assert JsonHandler.can_handle(dir_path) is False
+
+
+def test_json_handler_small_valid_json(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test JsonHandler with a small valid JSON file."""
+    from l_command.handlers.json import JsonHandler
+
+    # Create a test file
+    test_file = tmp_path / "small.json"
+    create_file(test_file, '{"key": "value"}')
+
+    # Mock subprocess.run, os.get_terminal_size, and Path.stat
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("os.get_terminal_size") as mock_terminal_size,
+        patch("pathlib.Path.stat") as mock_stat,
+    ):
+        # Configure terminal size to be larger than file
+        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+
+        # Configure stat to return a small file size
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = 100  # Small file
+        mock_stat.return_value = mock_stat_result
+
+        # Mock count_lines directly in the module where it's used
+        with patch(
+            "l_command.handlers.json.count_lines", return_value=1
+        ) as mock_count_lines:
+            # Call the handler
+            JsonHandler.handle(test_file)
+
+            # Verify count_lines was called
+            mock_count_lines.assert_called_once_with(test_file)
+
+        # Verify subprocess.run was called for validation and display
+        assert mock_run.call_count == 2
+        assert mock_run.call_args_list[0] == call(
+            ["jq", "empty", str(test_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert mock_run.call_args_list[1] == call(
+            ["jq", ".", str(test_file)],
+            check=True,
+        )
+
+
+def test_json_handler_large_valid_json(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test JsonHandler with a large valid JSON file."""
+    from l_command.handlers.json import JsonHandler
+
+    # Create a test file
+    test_file = tmp_path / "large.json"
+    content = '{\n"a": [' + ",\n".join([f'"{i}"' for i in range(50)]) + "]\n}"
+    create_file(test_file, content)
+
+    # Mock subprocess.run, subprocess.Popen, os.get_terminal_size, and Path.stat
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("subprocess.Popen") as mock_popen,
+        patch("os.get_terminal_size") as mock_terminal_size,
+        patch("pathlib.Path.stat") as mock_stat,
+    ):
+        # Configure terminal size to be smaller than file
+        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+
+        # Configure stat to return a small file size
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = 1000  # Small enough to not exceed limit
+        mock_stat.return_value = mock_stat_result
+
+        # Configure mock_popen to return a process
+        mock_process = MagicMock()
+        mock_process.stdout = MagicMock()
+        mock_popen.return_value = mock_process
+
+        # Mock count_lines directly in the module where it's used
+        with patch(
+            "l_command.handlers.json.count_lines", return_value=52
+        ) as mock_count_lines:
+            # Call the handler
+            JsonHandler.handle(test_file)
+
+            # Verify count_lines was called
+            mock_count_lines.assert_called_once_with(test_file)
+
+        # Verify subprocess.run was called for validation
+        assert mock_run.call_args_list[0] == call(
+            ["jq", "empty", str(test_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Verify subprocess.Popen was called for jq
+        mock_popen.assert_called_once_with(
+            ["jq", "--color-output", ".", str(test_file)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        # Verify subprocess.run was called for less
+        assert mock_run.call_args_list[1] == call(
+            ["less", "-R"],
+            stdin=mock_process.stdout,
+            check=True,
+        )
+
+        # Verify stdout was closed and wait was called
+        mock_process.stdout.close.assert_called_once()
+        mock_process.wait.assert_called_once()
+
+
+def test_json_handler_oversized_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """Test JsonHandler with a JSON file exceeding size limit."""
+    from l_command.handlers.json import JsonHandler
+
+    # Create a test file
+    test_file = tmp_path / "oversized.json"
+    create_file(test_file, '{"key": "value"}', size_bytes=MAX_JSON_SIZE_BYTES + 1)
+
+    # Mock DefaultFileHandler.handle
+    with (
+        patch(
+            "l_command.handlers.default.DefaultFileHandler.handle"
+        ) as mock_default_handle,
+        patch("pathlib.Path.stat") as mock_stat,
+    ):
+        # Configure stat to return a large file size
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = MAX_JSON_SIZE_BYTES + 1
+        mock_stat.return_value = mock_stat_result
+
+        # Call the handler
+        JsonHandler.handle(test_file)
+
+        # Verify DefaultFileHandler.handle was called
+        mock_default_handle.assert_called_once_with(test_file)
+
+
+def test_json_handler_invalid_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """Test JsonHandler with an invalid JSON file."""
+    from l_command.handlers.json import JsonHandler
+
+    # Create a test file
+    test_file = tmp_path / "invalid.json"
+    create_file(test_file, "{invalid json")
+
+    # Mock subprocess.run and DefaultFileHandler.handle
+    with (
+        patch("subprocess.run") as mock_run,
+        patch(
+            "l_command.handlers.default.DefaultFileHandler.handle"
+        ) as mock_default_handle,
+        patch("pathlib.Path.stat") as mock_stat,
+    ):
+        # Configure stat to return a small file size
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = 100
+        mock_stat.return_value = mock_stat_result
+
+        # Configure subprocess.run to raise CalledProcessError for jq empty
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["jq", "empty"])
+
+        # Call the handler
+        JsonHandler.handle(test_file)
+
+        # Verify subprocess.run was called for validation
+        mock_run.assert_called_once_with(
+            ["jq", "empty", str(test_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Verify DefaultFileHandler.handle was called
+        mock_default_handle.assert_called_once_with(test_file)
+
+
+def test_json_handler_jq_not_found(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """Test JsonHandler when jq command is not found."""
+    from l_command.handlers.json import JsonHandler
+
+    # Create a test file
+    test_file = tmp_path / "test.json"
+    create_file(test_file, '{"key": "value"}')
+
+    # Mock subprocess.run and DefaultFileHandler.handle
+    with (
+        patch("subprocess.run") as mock_run,
+        patch(
+            "l_command.handlers.default.DefaultFileHandler.handle"
+        ) as mock_default_handle,
+        patch("pathlib.Path.stat") as mock_stat,
+    ):
+        # Configure stat to return a small file size
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = 100
+        mock_stat.return_value = mock_stat_result
+
+        # Configure subprocess.run to raise FileNotFoundError
+        mock_run.side_effect = FileNotFoundError("jq not found")
+
+        # Call the handler
+        JsonHandler.handle(test_file)
+
+        # Verify subprocess.run was called for validation
+        mock_run.assert_called_once_with(
+            ["jq", "empty", str(test_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Verify DefaultFileHandler.handle was called
+        mock_default_handle.assert_called_once_with(test_file)
+
+
 def test_count_lines(tmp_path: Path) -> None:
     """行数カウント機能のテスト"""
     # テスト用のファイルを作成
