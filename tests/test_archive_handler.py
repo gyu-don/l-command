@@ -29,7 +29,7 @@ def test_can_handle_invalid() -> None:
     assert ArchiveHandler.can_handle(path) is False
 
 
-def test_handle_zip(mocker: MockerFixture) -> None:
+def test_handle_zip(mocker: "MockerFixture") -> None:
     path = Path("test.zip")
     mocker.patch("shutil.which", return_value="/usr/bin/unzip")
     mock_run = mocker.patch("l_command.handlers.archive.subprocess.run")
@@ -37,7 +37,7 @@ def test_handle_zip(mocker: MockerFixture) -> None:
     mock_run.assert_called_with(["unzip", "-l", str(path)], check=True)
 
 
-def test_handle_tar(mocker: MockerFixture) -> None:
+def test_handle_tar(mocker: "MockerFixture") -> None:
     path = Path("test.tar")
     mocker.patch("shutil.which", return_value="/usr/bin/tar")
     mock_run = mocker.patch("l_command.handlers.archive.subprocess.run")
@@ -55,7 +55,7 @@ def test_can_handle_tar_zst() -> None:
     assert ArchiveHandler.can_handle(path) is True
 
 
-def test_handle_jar(mocker: MockerFixture) -> None:
+def test_handle_jar(mocker: "MockerFixture") -> None:
     path = Path("test.jar")
     mocker.patch("shutil.which", return_value="/usr/bin/unzip")
     mocker.patch("l_command.handlers.archive.subprocess.run")
@@ -63,7 +63,7 @@ def test_handle_jar(mocker: MockerFixture) -> None:
     subprocess.run.assert_called_with(["unzip", "-l", str(path)], check=True)
 
 
-def test_handle_tar_zst(mocker: MockerFixture) -> None:
+def test_handle_tar_zst(mocker: "MockerFixture") -> None:
     path = Path("test.tar.zst")
     mocker.patch("shutil.which", side_effect=["/usr/bin/tar", "/usr/bin/unzstd"])
     mocker.patch("l_command.handlers.archive.subprocess.run")
@@ -73,7 +73,7 @@ def test_handle_tar_zst(mocker: MockerFixture) -> None:
     )
 
 
-def test_handle_zip_with_less(mocker: MockerFixture) -> None:
+def test_handle_zip_with_less(mocker: "MockerFixture") -> None:
     path = Path("test.zip")
     mocker.patch("shutil.which", return_value="/usr/bin/unzip")
     mocker.patch("os.get_terminal_size", return_value=os.terminal_size((80, 24)))
@@ -95,7 +95,7 @@ def test_handle_zip_with_less(mocker: MockerFixture) -> None:
     mock_run.assert_called_with(["less", "-R"], stdin=mock_stdout, check=True)
 
 
-def test_handle_tar_with_less(mocker: MockerFixture) -> None:
+def test_handle_tar_with_less(mocker: "MockerFixture") -> None:
     path = Path("test.tar")
     mocker.patch("shutil.which", side_effect=["/usr/bin/tar", "/usr/bin.unzstd"])
     mocker.patch("os.get_terminal_size", return_value=os.terminal_size((80, 24)))
