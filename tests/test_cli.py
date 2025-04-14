@@ -1,3 +1,4 @@
+import os
 import stat
 import subprocess
 import sys
@@ -71,25 +72,110 @@ def test_main_with_nonexistent_path(
     mock_subprocess_run.assert_not_called()
 
 
-def test_main_with_directory(
+def test_main_with_directory_small(
     tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
 ) -> None:
-    """Test main() with a directory path."""
+    """Test main() with a directory path (small directory, uses direct output)."""
     test_dir = tmp_path / "test_dir"
     test_dir.mkdir()  # Create real directory
 
-    # Combine with statements
-    with (
-        patch.object(Path, "is_dir", return_value=True),
-        patch.object(Path, "is_file", return_value=False),
-        patch.object(Path, "exists", return_value=True),
-    ):
+    # Create a mock for DirectoryHandler
+    mock_directory_handler = MagicMock()
+    mock_directory_handler.__name__ = "MockDirectoryHandler"
+
+    # Configure the mock to simulate DirectoryHandler behavior for small directory
+    def mock_handle(path: Path) -> None:
+        # Simulate DirectoryHandler behavior for small directory
+        # Run ls directly
+        subprocess.run(["ls", "-la", "--color=auto", str(path)], check=True)
+
+    mock_directory_handler.handle.side_effect = mock_handle
+
+    # Patch the handlers module to return our mock handler
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handler
+        mock_get_handlers.return_value = [mock_directory_handler]
+
+        # Configure the mock handler
+        mock_directory_handler.can_handle.return_value = True
+
+        # Run the main function
         monkeypatch.setattr("sys.argv", ["l_command", str(test_dir)])
         result = main()
 
+    # Verify the handler was called correctly
+    mock_directory_handler.can_handle.assert_called_once_with(test_dir)
+    mock_directory_handler.handle.assert_called_once_with(test_dir)
+
     assert result == 0
     mock_subprocess_run.assert_called_once_with(
-        ["ls", "-la", "--color=auto", str(test_dir)]
+        ["ls", "-la", "--color=auto", str(test_dir)], check=True
+    )
+
+
+def test_main_with_directory_large(
+    tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
+) -> None:
+    """Test main() with a directory path (large directory, uses less)."""
+    test_dir = tmp_path / "test_dir_large"
+    test_dir.mkdir()  # Create real directory
+
+    # Prepare mock objects for Popen (ls) and Run (less)
+    mock_ls_proc = MagicMock(spec=subprocess.Popen)
+    mock_ls_proc.stdout = MagicMock()
+
+    # Create a mock for DirectoryHandler
+    mock_directory_handler = MagicMock()
+    mock_directory_handler.__name__ = "MockDirectoryHandler"
+
+    # Configure the mock to simulate DirectoryHandler behavior for large directory
+    def mock_handle(path: Path) -> None:
+        # Simulate DirectoryHandler behavior for large directory
+        # First run ls to count lines
+        with patch("subprocess.Popen") as mock_popen:
+            # Configure first Popen call to return mock process with many lines
+            mock_first_proc = MagicMock()
+            mock_first_proc.stdout = MagicMock()
+            mock_first_proc.stdout.readlines.return_value = ["line"] * 50  # 50 lines
+            mock_popen.return_value = mock_first_proc
+
+            # Then run ls again and pipe to less
+            with patch("os.get_terminal_size") as mock_terminal_size:
+                mock_terminal_size.return_value = os.terminal_size(
+                    (80, 24)
+                )  # 24 lines terminal
+
+                # Configure second Popen call
+                mock_popen.return_value = mock_ls_proc
+
+                # Run less with ls output
+                mock_subprocess_run(
+                    ["less", "-R"], stdin=mock_ls_proc.stdout, check=True
+                )
+                mock_ls_proc.stdout.close()
+                mock_ls_proc.wait()
+
+    mock_directory_handler.handle.side_effect = mock_handle
+
+    # Patch the handlers module to return our mock handler
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handler
+        mock_get_handlers.return_value = [mock_directory_handler]
+
+        # Configure the mock handler
+        mock_directory_handler.can_handle.return_value = True
+
+        # Run the main function
+        monkeypatch.setattr("sys.argv", ["l_command", str(test_dir)])
+        result = main()
+
+    # Verify the handler was called correctly
+    mock_directory_handler.can_handle.assert_called_once_with(test_dir)
+    mock_directory_handler.handle.assert_called_once_with(test_dir)
+
+    assert result == 0
+    mock_subprocess_run.assert_called_with(
+        ["less", "-R"], stdin=mock_ls_proc.stdout, check=True
     )
 
 
