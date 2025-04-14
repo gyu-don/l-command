@@ -6,6 +6,7 @@ from l_command.handlers.base import FileHandler
 from l_command.handlers.default import DefaultFileHandler
 from l_command.handlers.directory import DirectoryHandler
 from l_command.handlers.json import JsonHandler
+from l_command.handlers.archive import ArchiveHandler
 
 
 def get_handlers() -> list[type[FileHandler]]:
@@ -13,6 +14,7 @@ def get_handlers() -> list[type[FileHandler]]:
     handlers: list[type[FileHandler]] = [
         DirectoryHandler,
         JsonHandler,
+        ArchiveHandler,
         DefaultFileHandler,
     ]
     return sorted(handlers, key=lambda h: h.priority(), reverse=True)
