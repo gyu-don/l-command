@@ -179,6 +179,110 @@ def test_main_with_directory_large(
     )
 
 
+def test_directory_handler_small_directory(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test DirectoryHandler with a small directory (direct output)."""
+    from l_command.handlers.directory import DirectoryHandler
+
+    # Create a test directory
+    test_dir = tmp_path / "small_dir"
+    test_dir.mkdir()
+
+    # Mock subprocess.run and subprocess.Popen
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("subprocess.Popen") as mock_popen,
+        patch("os.get_terminal_size") as mock_terminal_size,
+    ):
+        # Configure mock_popen to return a process with few lines
+        mock_process = MagicMock()
+        mock_process.stdout = MagicMock()
+        mock_process.stdout.readlines.return_value = ["line"] * 10  # 10 lines
+        mock_popen.return_value = mock_process
+
+        # Configure terminal size to be larger than output
+        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+
+        # Call the handler
+        DirectoryHandler.handle(test_dir)
+
+        # Verify subprocess.Popen was called correctly for counting lines
+        mock_popen.assert_called_with(
+            ["ls", "-la", "--color=always", str(test_dir)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        # Verify subprocess.run was called with correct arguments for small directory
+        mock_run.assert_called_with(
+            ["ls", "-la", "--color=auto", str(test_dir)],
+            check=True,
+        )
+
+
+def test_directory_handler_large_directory(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test DirectoryHandler with a large directory (uses less)."""
+    from l_command.handlers.directory import DirectoryHandler
+
+    # Create a test directory
+    test_dir = tmp_path / "large_dir"
+    test_dir.mkdir()
+
+    # Mock subprocess.run, subprocess.Popen, and os.get_terminal_size
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("subprocess.Popen") as mock_popen,
+        patch("os.get_terminal_size") as mock_terminal_size,
+    ):
+        # First Popen call for counting lines
+        first_process = MagicMock()
+        first_process.stdout = MagicMock()
+        first_process.stdout.readlines.return_value = ["line"] * 50  # 50 lines
+
+        # Second Popen call for piping to less
+        second_process = MagicMock()
+        second_process.stdout = MagicMock()
+
+        # Configure mock_popen to return different processes on consecutive calls
+        mock_popen.side_effect = [first_process, second_process]
+
+        # Configure terminal size to be smaller than output
+        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+
+        # Call the handler
+        DirectoryHandler.handle(test_dir)
+
+        # Verify first subprocess.Popen call for counting lines
+        assert mock_popen.call_args_list[0] == call(
+            ["ls", "-la", "--color=always", str(test_dir)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        # Verify second subprocess.Popen call for piping to less
+        assert mock_popen.call_args_list[1] == call(
+            ["ls", "-la", "--color=always", str(test_dir)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        # Verify subprocess.run was called with less
+        mock_run.assert_called_with(
+            ["less", "-R"],
+            stdin=second_process.stdout,
+            check=True,
+        )
+
+        # Verify stdout was closed and wait was called
+        second_process.stdout.close.assert_called_once()
+        second_process.wait.assert_called_once()
+
+
 def test_count_lines(tmp_path: Path) -> None:
     """行数カウント機能のテスト"""
     # テスト用のファイルを作成
