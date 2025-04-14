@@ -20,32 +20,17 @@ class ArchiveHandler(FileHandler):
         suffix = path.suffix.lower()
         name = path.name.lower()
 
-        # Check for required commands
-        if (
-            suffix == ".zip" or suffix in [".jar", ".war", ".ear", ".apk", ".ipa"]
-        ) and shutil.which("unzip") is None:
-            return False
+        if suffix in (".zip", ".jar", ".war", ".ear", ".apk", ".ipa"):
+            return shutil.which("unzip") is not None
 
-        if (
-            suffix == ".tar"
-            or name.endswith(
-                (".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst")
-            )
-        ) and (
-            shutil.which("tar") is None
-            or (name.endswith(".tar.zst") and shutil.which("unzstd") is None)
-        ):
-            return False
-
-        # ZIP archives
-        if suffix in [".zip", ".jar", ".war", ".ear", ".apk", ".ipa"]:
-            return True
-
-        # TAR archives (including compressed ones)
-        if suffix in [".tar"] or name.endswith(
-            (".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst")
-        ):
-            return True
+        # Check required command for TAR archives:
+        if shutil.which("tar") is not None:
+            if name.endswith(".tar.zst") and shutil.which("unzstd") is not None:
+                return True
+            if name.endswith(
+                (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
+            ):
+                return True
 
         return False
 
