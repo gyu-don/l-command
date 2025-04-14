@@ -2,11 +2,11 @@
 Module for registering and retrieving file handlers.
 """
 
+from l_command.handlers.archive import ArchiveHandler
 from l_command.handlers.base import FileHandler
 from l_command.handlers.default import DefaultFileHandler
 from l_command.handlers.directory import DirectoryHandler
 from l_command.handlers.json import JsonHandler
-from l_command.handlers.archive import ArchiveHandler
 
 
 def get_handlers() -> list[type[FileHandler]]:
