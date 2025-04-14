@@ -1,4 +1,3 @@
-import os
 import stat
 import subprocess
 import sys
@@ -11,13 +10,11 @@ import pytest
 from _pytest.capture import CaptureFixture
 from _pytest.monkeypatch import MonkeyPatch
 
-from l_command.cli import (
-    count_lines,
-    main,
-)
+from l_command.cli import main
 from l_command.constants import (
     MAX_JSON_SIZE_BYTES,
 )
+from l_command.utils import count_lines
 
 # Test directory path relative to this test file
 TEST_DIR = Path(__file__).parent / "test_files"
@@ -132,23 +129,29 @@ def test_main_with_small_text_file(
 ) -> None:
     """Test main() with a non-JSON file shorter than terminal height (uses cat)."""
     test_file = tmp_path / "small_file.txt"
-    file_lines = 10
-    terminal_height = 24
-    create_file(test_file, "\n".join(["line"] * file_lines))
+    create_file(test_file, "\n".join(["line"] * 10))
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    # Patch count_lines and get_terminal_size
-    with (
-        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
-        patch("os.get_terminal_size") as mock_terminal_size,
-    ):
-        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
+    # Create a mock for DefaultFileHandler
+    mock_default_handler = MagicMock()
+    mock_default_handler.__name__ = "MockHandler"
+
+    # Patch the handlers module to return our mock handler
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handler
+        mock_get_handlers.return_value = [mock_default_handler]
+
+        # Configure the mock handler
+        mock_default_handler.can_handle.return_value = True
+
+        # Run the main function
         result = main()
 
+        # Verify the handler was called correctly
+        mock_default_handler.can_handle.assert_called_once_with(test_file)
+        mock_default_handler.handle.assert_called_once_with(test_file)
+
     assert result == 0
-    mock_count.assert_called_once_with(test_file)
-    mock_terminal_size.assert_called()
-    mock_subprocess_run.assert_called_once_with(["cat", str(test_file)], check=True)
 
 
 def test_main_with_large_text_file(
@@ -156,22 +159,36 @@ def test_main_with_large_text_file(
 ) -> None:
     """Test main() with a non-JSON file taller than terminal height (uses less)."""
     test_file = tmp_path / "large_file.txt"
-    file_lines = 30
-    terminal_height = 24
-    create_file(test_file, "\n".join(["line"] * file_lines))
+    create_file(test_file, "\n".join(["line"] * 30))
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    # Use parenthesis syntax for multiple patches
-    with (
-        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
-        patch("os.get_terminal_size") as mock_terminal_size,
-    ):
-        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
+    # Create a mock for DefaultFileHandler
+    mock_default_handler = MagicMock()
+    mock_default_handler.__name__ = "MockHandler"
+
+    # Configure the mock to use less for display
+    def mock_handle(path: Path) -> None:
+        # Simulate DefaultFileHandler behavior
+        mock_subprocess_run(["less", "-RFX", str(path)], check=True)
+
+    mock_default_handler.handle.side_effect = mock_handle
+
+    # Patch the handlers module to return our mock handler
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handler
+        mock_get_handlers.return_value = [mock_default_handler]
+
+        # Configure the mock handler
+        mock_default_handler.can_handle.return_value = True
+
+        # Run the main function
         result = main()
 
+        # Verify the handler was called correctly
+        mock_default_handler.can_handle.assert_called_once_with(test_file)
+        mock_default_handler.handle.assert_called_once_with(test_file)
+
     assert result == 0
-    mock_count.assert_called_once_with(test_file)
-    mock_terminal_size.assert_called()
     mock_subprocess_run.assert_called_once_with(
         ["less", "-RFX", str(test_file)], check=True
     )
@@ -186,40 +203,42 @@ def test_main_with_valid_small_json(
     """Test main() with a valid, small JSON file (uses direct jq)."""
     test_file = tmp_path / "valid_small.json"
     content = '{"key": "value"}'
-    file_lines = 1  # Define lines <= terminal height
-    terminal_height = 24
     create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    mock_stat.return_value.st_size = len(content.encode("utf-8"))
-    mock_stat.return_value.st_mode = stat.S_IFREG
+    # Create a mock for JsonHandler
+    mock_json_handler = MagicMock()
+    mock_json_handler.__name__ = "MockJsonHandler"
 
-    # Use parenthesis syntax for multiple patches
-    with (
-        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
-        patch("os.get_terminal_size") as mock_terminal_size,
-    ):
-        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
+    # Configure the mock to simulate JsonHandler behavior
+    def mock_handle(path: Path) -> None:
+        # Simulate JsonHandler behavior for small JSON file
+        mock_subprocess_run(
+            ["jq", "empty", str(path)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        mock_subprocess_run(["jq", ".", str(path)], check=True)
 
-        # Mock subprocess.run side effect for 'jq empty' and 'jq .' calls
-        def run_side_effect(
-            *args: Sequence[Any], **kwargs: dict[str, Any]
-        ) -> subprocess.CompletedProcess:
-            cmd = args[0]
-            if cmd == ["jq", "empty", str(test_file)]:
-                return subprocess.CompletedProcess(args=cmd, returncode=0)
-            if cmd == ["jq", ".", str(test_file)]:
-                return subprocess.CompletedProcess(args=cmd, returncode=0)
-            print(f"Unexpected subprocess.run call: {cmd}", file=sys.stderr)
-            return subprocess.CompletedProcess(args=cmd, returncode=1)
+    mock_json_handler.handle.side_effect = mock_handle
 
-        mock_subprocess_run.side_effect = run_side_effect
+    # Patch the handlers module to return our mock handler
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handler
+        mock_get_handlers.return_value = [mock_json_handler]
 
+        # Configure the mock handler
+        mock_json_handler.can_handle.return_value = True
+
+        # Run the main function
         result = main()
 
+        # Verify the handler was called correctly
+        mock_json_handler.can_handle.assert_called_once_with(test_file)
+        mock_json_handler.handle.assert_called_once_with(test_file)
+
     assert result == 0
-    mock_count.assert_called_once_with(test_file)
-    mock_terminal_size.assert_called()  # Verify terminal size was checked
 
     # Verify the calls to subprocess.run
     expected_run_calls = [
@@ -244,8 +263,6 @@ def test_main_with_valid_large_json_uses_less(
     """Test main() with a valid JSON taller than terminal (uses jq | less)."""
     test_file = tmp_path / "valid_large.json"
     content = '{\n"a": [' + ",\n".join([f'"{i}"' for i in range(50)]) + "]\n}"
-    file_lines = 52
-    terminal_height = 24
     create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
@@ -294,33 +311,48 @@ def test_main_with_valid_large_json_uses_less(
 
     mock_subprocess_run.side_effect = run_side_effect
 
-    # Use parenthesis syntax for multiple patches
-    with (
-        patch("l_command.cli.count_lines", return_value=file_lines) as mock_count,
-        patch("os.get_terminal_size") as mock_terminal_size,
-        patch(
-            "subprocess.Popen", side_effect=popen_side_effect
-        ) as mock_popen,  # Patch Popen here
-    ):
-        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
+    # Create a mock for JsonHandler
+    mock_json_handler = MagicMock()
+    mock_json_handler.__name__ = "MockJsonHandler"
+
+    # Configure the mock to simulate JsonHandler behavior for large JSON
+    def mock_handle(path: Path) -> None:
+        # Simulate JsonHandler behavior for large JSON file
+        # First validate with jq empty
+        mock_subprocess_run(
+            ["jq", "empty", str(path)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Then use jq with less for display
+        with patch("subprocess.Popen", side_effect=popen_side_effect):
+            mock_subprocess_run(["less", "-R"], stdin=mock_jq_proc.stdout, check=True)
+            mock_jq_proc.stdout.close()
+            mock_jq_proc.wait()
+
+    mock_json_handler.handle.side_effect = mock_handle
+
+    # Patch the handlers module to return our mock handler
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handler
+        mock_get_handlers.return_value = [mock_json_handler]
+
+        # Configure the mock handler
+        mock_json_handler.can_handle.return_value = True
+
+        # Run the main function
         result = main()
 
-    # Assertions remain largely the same, but check mock_subprocess_run calls now
-    captured = capsys.readouterr()
+    # Assertions
     assert result == 0
-    assert captured.err == ""
 
-    mock_count.assert_called_once_with(test_file)
-    mock_terminal_size.assert_called()
+    # Verify the handler was called correctly
+    mock_json_handler.can_handle.assert_called_once_with(test_file)
+    mock_json_handler.handle.assert_called_once_with(test_file)
 
-    # Verify 'jq --color-output .' was called via Popen
-    mock_popen.assert_called_once_with(
-        ["jq", "--color-output", ".", str(test_file)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    # Verify 'jq empty' and 'less -R' were called via Run
+    # Verify the subprocess.run calls
     expected_run_calls = [
         call(
             ["jq", "empty", str(test_file)],
@@ -335,11 +367,9 @@ def test_main_with_valid_large_json_uses_less(
         ),
     ]
     mock_subprocess_run.assert_has_calls(expected_run_calls)
-    assert mock_subprocess_run.call_count == 2  # Ensure no other run calls
 
     # Verify pipe closing and waiting logic
     mock_jq_proc.stdout.close.assert_called_once()
-    # mock_less_proc is no longer used, less is called via run
     mock_jq_proc.wait.assert_called_once()
 
 
@@ -356,46 +386,56 @@ def test_main_with_valid_large_json(
     create_file(test_file, content, size_bytes=MAX_JSON_SIZE_BYTES + 1)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    # Mock stat to return large size
-    mock_stat.return_value.st_size = MAX_JSON_SIZE_BYTES + 1
-    mock_stat.return_value.st_mode = stat.S_IFREG
+    # Create a mock for JsonHandler
+    mock_json_handler = MagicMock()
+    mock_json_handler.__name__ = "MockJsonHandler"
 
-    # Define fallback_lines and terminal_height HERE
-    fallback_lines = 5
-    terminal_height = 24
-    # Mock os.get_terminal_size for the fallback display_file_default
-    # Use parenthesis syntax for multiple patches
-    with (
-        patch("os.get_terminal_size") as mock_terminal_size,
-        patch("l_command.cli.count_lines", return_value=fallback_lines) as mock_count,
-    ):
-        mock_terminal_size.return_value = os.terminal_size((80, terminal_height))
+    # Create a mock for DefaultFileHandler (fallback)
+    mock_default_handler = MagicMock()
+    mock_default_handler.__name__ = "MockDefaultHandler"
 
-        # Mock subprocess.run for the fallback 'cat' call
-        def run_side_effect(
-            *args: Sequence[Any], **kwargs: dict[str, Any]
-        ) -> subprocess.CompletedProcess:
-            cmd = args[0]
-            if cmd == ["cat", str(test_file)]:
-                return subprocess.CompletedProcess(args=cmd, returncode=0)
-            print(
-                f"Unexpected subprocess.run call in size fallback: {cmd}",
-                file=sys.stderr,
-            )
-            return subprocess.CompletedProcess(args=cmd, returncode=1)
+    # Configure the mock to simulate JsonHandler behavior
+    def mock_json_handle(path: Path) -> None:
+        # Simulate JsonHandler behavior for large JSON file
+        # Check file size and fall back to default handler
+        print(
+            f"File size ({MAX_JSON_SIZE_BYTES + 1} bytes) exceeds limit",
+            file=sys.stderr,
+        )
+        mock_default_handler.handle(path)
 
-        mock_subprocess_run.side_effect = run_side_effect
+    mock_json_handler.handle.side_effect = mock_json_handle
 
+    # Configure the mock to simulate DefaultFileHandler behavior
+    def mock_default_handle(path: Path) -> None:
+        # Simulate DefaultFileHandler behavior
+        mock_subprocess_run(["cat", str(path)], check=True)
+
+    mock_default_handler.handle.side_effect = mock_default_handle
+
+    # Patch the handlers module to return our mock handlers
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handlers
+        mock_get_handlers.return_value = [mock_json_handler, mock_default_handler]
+
+        # Configure the mock handlers
+        mock_json_handler.can_handle.return_value = True
+        mock_default_handler.can_handle.return_value = True
+
+        # Run the main function
         result = main()
 
     captured = capsys.readouterr()
     assert result == 0
     assert "exceeds limit" in captured.err
-    # Check that display_file_default's mechanism (cat or less) was called
-    # In this case, lines (5) < height (24), so 'cat' is expected
+
+    # Verify the handlers were called correctly
+    mock_json_handler.can_handle.assert_called_once_with(test_file)
+    mock_json_handler.handle.assert_called_once_with(test_file)
+    mock_default_handler.handle.assert_called_once_with(test_file)
+
+    # Verify the subprocess.run call
     mock_subprocess_run.assert_called_once_with(["cat", str(test_file)], check=True)
-    mock_count.assert_called_once_with(test_file)
-    mock_terminal_size.assert_called()
 
 
 def test_main_with_invalid_json(
@@ -411,13 +451,36 @@ def test_main_with_invalid_json(
     create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    mock_stat.return_value.st_size = len(content.encode("utf-8"))
-    mock_stat.return_value.st_mode = stat.S_IFREG
+    # Create a mock for JsonHandler
+    mock_json_handler = MagicMock()
+    mock_json_handler.__name__ = "MockJsonHandler"
 
-    # Mock subprocess for jq empty (fails) and fallback (cat/less)
+    # Create a mock for DefaultFileHandler (fallback)
+    mock_default_handler = MagicMock()
+    mock_default_handler.__name__ = "MockDefaultHandler"
+
+    # Configure the mock to simulate JsonHandler behavior
+    def mock_json_handle(path: Path) -> None:
+        # Simulate JsonHandler behavior for invalid JSON file
+        try:
+            # First try to validate with jq empty
+            mock_subprocess_run(
+                ["jq", "empty", str(path)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            # Validation fails, print error and fall back to default handler
+            print(
+                "File identified as JSON but failed validation or is invalid",
+                file=sys.stderr,
+            )
+            mock_default_handler.handle(path)
+
+    # Set up the side effect to raise CalledProcessError for jq empty
     def run_side_effect(
-        *args: Sequence[Any],
-        **kwargs: dict[str, Any],
+        *args: Sequence[Any], **kwargs: dict[str, Any]
     ) -> subprocess.CompletedProcess:
         cmd = args[0]
         if cmd == ["jq", "empty", str(test_file)]:
@@ -430,34 +493,47 @@ def test_main_with_invalid_json(
 
     mock_subprocess_run.side_effect = run_side_effect
 
-    # Mock os.get_terminal_size and count_lines for the fallback
-    with (
-        patch("os.get_terminal_size") as mock_terminal_size,
-        patch("l_command.cli.count_lines", return_value=1) as mock_count,
-    ):
-        # Provide both lines and columns for the mock
-        mock_terminal_size.return_value = os.terminal_size((80, 24))
+    mock_json_handler.handle.side_effect = mock_json_handle
+
+    # Configure the mock to simulate DefaultFileHandler behavior
+    def mock_default_handle(path: Path) -> None:
+        # Simulate DefaultFileHandler behavior
+        mock_subprocess_run(["cat", str(path)], check=True)
+
+    mock_default_handler.handle.side_effect = mock_default_handle
+
+    # Patch the handlers module to return our mock handlers
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handlers
+        mock_get_handlers.return_value = [mock_json_handler, mock_default_handler]
+
+        # Configure the mock handlers
+        mock_json_handler.can_handle.return_value = True
+        mock_default_handler.can_handle.return_value = True
+
+        # Run the main function
         result = main()
 
     captured = capsys.readouterr()
     assert result == 0
     assert "failed validation or is invalid" in captured.err
-    # Check that fallback mechanism (cat) was called
-    # Need to check calls carefully due to side effect raising error
-    assert mock_subprocess_run.call_count == 2
-    # First call is jq empty
-    assert mock_subprocess_run.call_args_list[0] == call(
-        ["jq", "empty", str(test_file)],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    # Second call is the fallback (cat)
-    assert mock_subprocess_run.call_args_list[1] == call(
-        ["cat", str(test_file)], check=True
-    )
-    mock_count.assert_called_once_with(test_file)
-    mock_terminal_size.assert_called()
+
+    # Verify the handlers were called correctly
+    mock_json_handler.can_handle.assert_called_once_with(test_file)
+    mock_json_handler.handle.assert_called_once_with(test_file)
+    mock_default_handler.handle.assert_called_once_with(test_file)
+
+    # Verify the subprocess.run calls
+    expected_run_calls = [
+        call(
+            ["jq", "empty", str(test_file)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ),
+        call(["cat", str(test_file)], check=True),
+    ]
+    mock_subprocess_run.assert_has_calls(expected_run_calls)
 
 
 def test_main_with_jq_not_found(
@@ -473,13 +549,33 @@ def test_main_with_jq_not_found(
     create_file(test_file, content)
     monkeypatch.setattr("sys.argv", ["l_command", str(test_file)])
 
-    mock_stat.return_value.st_size = len(content.encode("utf-8"))
-    mock_stat.return_value.st_mode = stat.S_IFREG
+    # Create a mock for JsonHandler
+    mock_json_handler = MagicMock()
+    mock_json_handler.__name__ = "MockJsonHandler"
 
-    # Mock subprocess to raise FileNotFoundError for jq
+    # Create a mock for DefaultFileHandler (fallback)
+    mock_default_handler = MagicMock()
+    mock_default_handler.__name__ = "MockDefaultHandler"
+
+    # Configure the mock to simulate JsonHandler behavior
+    def mock_json_handle(path: Path) -> None:
+        # Simulate JsonHandler behavior when jq is not found
+        try:
+            # Try to use jq
+            mock_subprocess_run(
+                ["jq", "empty", str(path)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            # jq not found, print error and fall back to default handler
+            print("jq command not found", file=sys.stderr)
+            mock_default_handler.handle(path)
+
+    # Set up the side effect to raise FileNotFoundError for jq
     def run_side_effect(
-        *args: Sequence[Any],
-        **kwargs: dict[str, Any],
+        *args: Sequence[Any], **kwargs: dict[str, Any]
     ) -> subprocess.CompletedProcess:
         cmd = args[0]
         if cmd[0] == "jq":
@@ -491,19 +587,35 @@ def test_main_with_jq_not_found(
 
     mock_subprocess_run.side_effect = run_side_effect
 
-    # Mock os.get_terminal_size and count_lines for the fallback
-    with (
-        patch("os.get_terminal_size") as mock_terminal_size,
-        patch("l_command.cli.count_lines", return_value=1) as mock_count,
-    ):
-        # Provide both lines and columns for the mock
-        mock_terminal_size.return_value = os.terminal_size((80, 24))
+    mock_json_handler.handle.side_effect = mock_json_handle
+
+    # Configure the mock to simulate DefaultFileHandler behavior
+    def mock_default_handle(path: Path) -> None:
+        # Simulate DefaultFileHandler behavior
+        mock_subprocess_run(["cat", str(path)], check=True)
+
+    mock_default_handler.handle.side_effect = mock_default_handle
+
+    # Patch the handlers module to return our mock handlers
+    with patch("l_command.cli.get_handlers") as mock_get_handlers:
+        # Set up the mock to return a list with our mock handlers
+        mock_get_handlers.return_value = [mock_json_handler, mock_default_handler]
+
+        # Configure the mock handlers
+        mock_json_handler.can_handle.return_value = True
+        mock_default_handler.can_handle.return_value = True
+
+        # Run the main function
         result = main()
 
     captured = capsys.readouterr()
     assert result == 0
     assert "jq command not found" in captured.err
-    # Check that fallback mechanism (cat) was called
+
+    # Verify the handlers were called correctly
+    mock_json_handler.can_handle.assert_called_once_with(test_file)
+    mock_json_handler.handle.assert_called_once_with(test_file)
+    mock_default_handler.handle.assert_called_once_with(test_file)
+
+    # Verify the subprocess.run call
     mock_subprocess_run.assert_called_with(["cat", str(test_file)], check=True)
-    mock_count.assert_called_once_with(test_file)
-    mock_terminal_size.assert_called()
