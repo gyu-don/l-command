@@ -1,35 +1,47 @@
 # L command
 
-`l` コマンドは、 `less` のかわりにも `ls` のかわりにもなる新しいコマンドです。ファイルやディレクトリの中身をスマートに判別し、最適な方法で表示します。
+`l` command is a smart file and directory viewer that can replace both `less` and `ls`. It intelligently detects the content type and displays it in the most appropriate way.
 
 ## Usage
 
-- `l /path/to/file`: ファイルの内容を適切な方法で表示します
-  - ファイルが短い場合: `cat` として表示
-  - ファイルが長い場合: `less -RFX` として表示
-  - JSONファイルの場合: `jq` を使用して整形表示
-- `l /path/to/directory`: `ls -la --color=auto /path/to/directory` として働きます
-- `l /path/to/json`: JSONファイルを検出し、`jq` を使用して整形表示します
+- `l /path/to/file`: Display file content appropriately
+  - Short files: Display using `cat`
+  - Long files: Display using `less -RFX`
+  - JSON files: Format and display using `jq`
+  - Archive files: List contents using appropriate tools (`unzip -l`, `tar -tvf`)
+  - Binary files: Display using `hexdump -C`
+- `l /path/to/directory`: Works as `ls -la --color=auto /path/to/directory`
+- `l /path/to/json`: Detects JSON files and formats them using `jq`
+- `l /path/to/archive`: Detects archive files (zip, tar, etc.) and lists their contents
 
-## 詳細な動作仕様
+## Detailed Behavior
 
-- ファイルサイズや行数を自動判別し、短ければ `cat`、長ければ `less` を使用
-- ターミナルの高さを自動検出し、ファイルの行数がターミナルの高さを超える場合は `less` を使用
-- JSONファイルの自動検出と整形
-  - 拡張子が `.json` のファイル
-  - 拡張子がなくても、先頭部分が `{` または `[` で始まるUTF-8ファイル
-  - `jq empty` による構文チェックを行い、無効なJSONはデフォルト表示にフォールバック
-  - 大きなJSONファイル（10MB以上）はデフォルト表示にフォールバック
-- ディレクトリの自動判別と一覧表示
+- Automatically detects file size and line count, using `cat` for short files and `less` for long files
+- Detects terminal height and uses `less` if the file has more lines than the terminal height
+- Automatic JSON detection and formatting:
+  - Files with `.json` extension
+  - Files without extension but starting with `{` or `[` (UTF-8 encoded)
+  - Performs syntax check using `jq empty`, falling back to default display for invalid JSON
+  - Falls back to default display for large JSON files (>10MB)
+- Archive file detection and content listing:
+  - ZIP files (including .jar, .war, .ear, .apk, .ipa)
+  - TAR archives (including .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz, .tar.zst)
+- Binary file detection and hexdump display:
+  - Uses `file` command to detect binary files when available
+  - Falls back to content-based detection (checking for null bytes and non-printable characters)
+  - Displays binary files using `hexdump -C`
+- Directory detection and listing
 
-## オプション
+## Options
 
-現在はコマンドライン引数は以下のとおりです：
+Currently, the command line arguments are as follows:
 
-- 位置引数 `path`: 表示するファイルまたはディレクトリのパス (デフォルト: カレントディレクトリ `.`)
+- Positional argument `path`: Path to the file or directory to display (default: current directory `.`)
 
-## ユースケース
+## Use Cases
 
-- 単に中身を見たい時に `l file.txt`
-- ディレクトリの内容を一目で確認したい時に `l ./myfolder`
-- JSONファイルを整形して読みたいとき `l data.json`
+- View file content quickly: `l file.txt`
+- Check directory contents at a glance: `l ./myfolder`
+- Format and read JSON files: `l data.json`
+- List contents of archive files: `l archive.zip`
+- View binary files in hexdump format: `l binary.bin`

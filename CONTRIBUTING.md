@@ -1,85 +1,85 @@
-# 開発ガイドライン
+# Development Guidelines
 
-## 言語要件
-- プロダクトコードとユーザー向けドキュメント: 英語
-- 設計ドキュメント: 日本語/英語/混合可
+## Language Requirements
+- Product code and user-facing documentation: English
+- Design documents: Japanese/English/Mixed allowed
 
-## 環境セットアップ
+## Environment Setup
 
-### 必要なツール
-- Python 3.12以上
-- uv (Pythonパッケージマネージャー)
+### Required Tools
+- Python 3.11 or higher
+- uv (Python package manager)
 - Git
 
-### 開発環境構築
+### Development Environment Setup
 ```bash
-# リポジトリのクローン
+# Clone the repository
 git clone https://github.com/your-username/l-command.git
 cd l-command
 
-# uvのインストール（まだ持っていない場合）
+# Install uv (if you don't have it already)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 依存関係のインストール
+# Install dependencies
 uv sync
 
-# pre-commitフックのインストール
+# Install pre-commit hooks
 uv run pre-commit install
 ```
 
-### 開発コマンド
+### Development Commands
 ```bash
-# テストの実行
+# Run tests
 uv run pytest tests/
 
-# カバレッジ付きテスト
+# Run tests with coverage
 uv run pytest --cov=src/l_command tests/
 
-# リントチェック
+# Lint check
 uv run ruff check .
 
-# コードフォーマット
+# Code formatting
 uv run ruff format .
 
-# pre-commitフックの手動実行（全ファイル）
+# Run pre-commit hooks manually (all files)
 uv run pre-commit run --all-files
 ```
 
-### pre-commitの使用方法
-pre-commitは以下のタイミングで自動的に実行されます：
-- コミット時
-- プッシュ時（オプション）
+### Using pre-commit
+pre-commit hooks run automatically at these times:
+- When committing
+- When pushing (optional)
 
-手動で実行する場合：
+To run manually:
 ```bash
-# 全ファイルに対して実行
+# Run on all files
 uv run pre-commit run --all-files
 
-# 特定のファイルに対して実行
-uv run pre-commit run --files <ファイル名>
+# Run on specific files
+uv run pre-commit run --files <filename>
 ```
 
-pre-commitフックは以下のチェックを行います：
-- ruffによるコードフォーマットとリント
-- 大きなファイルのチェック
-- 大文字小文字の競合チェック
-- JSON/YAMLファイルの構文チェック
-- ファイル末尾の空白チェック
+pre-commit hooks perform the following checks:
+- Code formatting and linting with ruff
+- Large file checks
+- Case conflict checks
+- JSON/YAML file syntax checks
+- Trailing whitespace checks
 
-## コーディング規約
+## Coding Standards
 
-### コードスタイル
-- ruffをフォーマッターとリンターとして使用
-- タイプヒントは必須
-- 関数とクラスにはdocstringを記述する（Google styleを推奨）
+### Code Style
+- Use ruff as formatter and linter
+- Type hints are required
+- Functions and classes must have docstrings (Google style recommended)
 
-### ruffの設定
-`pyproject.toml`に以下の設定を追加:
+### ruff Configuration
+The project already includes ruff configuration in `pyproject.toml`:
 
 ```toml
 [tool.ruff]
-target-version = "py38"
-line-length = 88
+target-version = "py312"
+line-length = 120
 select = ["E", "F", "I", "N", "UP", "ANN", "B", "A", "C4", "SIM", "TD"]
 ignore = []
 
@@ -96,11 +96,12 @@ line-ending = "auto"
 convention = "google"
 ```
 
-### 型ヒントの使用例
+### Type Hints Example
 ```python
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Union, Tuple
 
-def analyze_path(path: Optional[str]) -> int:
+def analyze_path(path: Optional[Path]) -> int:
     """
     Analyze a path and display it with the appropriate command.
 
@@ -110,12 +111,12 @@ def analyze_path(path: Optional[str]) -> int:
     Returns:
         Exit code
     """
-    # 実装
+    # Implementation
 ```
 
-## Gitコミットメッセージのルール
+## Git Commit Message Rules
 
-### 基本構造
+### Basic Structure
 ```
 <type>(<scope>): <subject>
 
@@ -124,24 +125,24 @@ def analyze_path(path: Optional[str]) -> int:
 <footer>
 ```
 
-### タイプ
-- `feat`: 新機能
-- `fix`: バグ修正
-- `docs`: ドキュメントのみの変更
-- `style`: コードの意味に影響しない変更（空白、フォーマット、セミコロンの欠落など）
-- `refactor`: バグ修正でも機能追加でもないコード変更
-- `test`: 不足しているテストの追加や既存のテストの修正
-- `chore`: ビルドプロセスや補助ツールの変更
+### Types
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes only
+- `style`: Changes that don't affect code meaning (whitespace, formatting, etc.)
+- `refactor`: Code changes that are neither bug fixes nor feature additions
+- `test`: Adding missing tests or fixing existing tests
+- `chore`: Changes to build process or auxiliary tools
 
-### ルール
-1. 件名行は50文字以内
-2. 件名行は大文字で始めない
-3. 件名行は命令形で書く（"変更した"ではなく"変更する"）
-4. 件名行の末尾にピリオドをつけない
-5. 本文は72文字で折り返す
-6. 本文では「何を」「なぜ」を説明する（「どのように」は省略可）
+### Rules
+1. Subject line should be 50 characters or less
+2. Don't capitalize the subject line
+3. Use imperative mood in the subject line
+4. Don't end the subject line with a period
+5. Wrap body text at 72 characters
+6. Explain "what" and "why" in the body (not "how")
 
-### 例
+### Example
 ```
 feat(cli): add version flag support
 
@@ -149,13 +150,13 @@ Add -v and --version flags to display the current version of the tool.
 This resolves the user feedback issue #42.
 ```
 
-## 品質保証
+## Quality Assurance
 
-### テスト
-- pytestを使用してユニットテストとインテグレーションテストを作成
-- テストカバレッジ80%以上を目標
+### Testing
+- Create unit and integration tests using pytest
+- Aim for 80% or higher test coverage
 
-### GitHub CI設定
+### GitHub CI Configuration
 `.github/workflows/ci.yml`:
 
 ```yaml
@@ -172,7 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, "3.10", "3.11"]
+        python-version: [3.11, 3.12]
 
     steps:
     - uses: actions/checkout@v3
@@ -199,56 +200,52 @@ jobs:
       run: pytest
 ```
 
-## 開発ワークフロー
+## Development Workflow
 
-1. 新機能やバグ修正のためのブランチを作成
-2. 変更を実装（型ヒント含む）
-3. テストを追加・実行
-4. コードをフォーマット: `ruff format .`
-5. リントを実行: `ruff check .`
-6. PRを作成
+1. Create a branch for new features or bug fixes
+2. Implement changes (including type hints)
+3. Add and run tests
+4. Format code: `ruff format .`
+5. Run lint: `ruff check .`
+6. Create a PR
 
-## プロジェクト構造（拡張版）
+## Project Structure
 ```
 l-command/
 ├── README.md
 ├── LICENSE
-├── CONTRIBUTING.md           # この開発ガイドラインを含む
-├── pyproject.toml           # プロジェクトメタデータ、ビルド設定
-├── setup.py                 # 後方互換性のため
+├── CONTRIBUTING.md           # This development guide
+├── pyproject.toml            # Project metadata, build settings
 ├── src/
 │   └── l_command/
 │       ├── __init__.py
-│       ├── cli.py           # CLIエントリーポイント
-│       ├── core.py          # コアロジック
-│       ├── constants.py     # 定数
-│       └── handlers/        # 各種ハンドラ
+│       ├── cli.py            # CLI entry point
+│       ├── constants.py      # Constants
+│       ├── utils.py          # Utility functions
+│       └── handlers/         # File type handlers
 │           ├── __init__.py
-│           ├── file.py
-│           ├── directory.py
-│           └── stdin.py
-├── tests/
-│   ├── unit/               # 単体テスト
-│   └── integration/        # 統合テスト
-└── docs/                   # プロジェクトドキュメント
+│           ├── base.py       # Base handler class
+│           ├── default.py    # Default file handler
+│           ├── directory.py  # Directory handler
+│           ├── json.py       # JSON handler
+│           ├── archive.py    # Archive handler
+│           └── binary.py     # Binary handler
+├── tests/                    # Tests
+└── .cursordocs/              # Project documentation
 ```
 
-## 依存関係管理
+## Dependency Management
 
-このプロジェクトでは依存関係管理に`uv`を使用しています。
+This project uses `uv` for dependency management.
 
 ```bash
 uv sync
 ```
 
-## パッケージング
+## Packaging
 
 ```bash
-# ビルド
+# Build
 uv pip install build
 python -m build
-
-# PyPIにアップロード
-uv pip install twine
-python -m twine upload dist/*
 ```

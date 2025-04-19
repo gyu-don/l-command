@@ -1,12 +1,15 @@
 # .cursordocs
 
-You MAY create, edit and refer these documents if you necessary.
+This directory contains development documentation for the L Command project.
 
 ## implementation-plan.md
-Our implementation plan.
+Current implementation status and future development plans.
 
 ## developer-guide.md
-開発者向けのガイドライン、アーキテクチャ説明、および機能拡張方法。
+Developer guidelines, architecture explanation, and extension methods.
 
 ## implementation-examples.md
-新機能実装のための具体的なコード例。
+Concrete code examples for implementing new features.
+
+## json_command_tests.md
+Test results for JSON/jq command functionality.
