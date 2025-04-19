@@ -15,7 +15,7 @@ alwaysApply: true
 - To run Python commands, use `uv run`.
 - You SHOULD follow [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
 - タスクはこまめに区切ります。多くのことを行っていると感じたら、一度コミットしてタスクを区切ることを提案してください
-
+- This project repositry is `https://github.com/gyu-don/l-command`
 
 ## 細かいコーディング規約類
 - Use `pathlib` insteads `os.path`
