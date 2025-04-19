@@ -72,9 +72,7 @@ def test_main_with_nonexistent_path(
     mock_subprocess_run.assert_not_called()
 
 
-def test_main_with_directory_small(
-    tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
-) -> None:
+def test_main_with_directory_small(tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock) -> None:
     """Test main() with a directory path (small directory, uses direct output)."""
     test_dir = tmp_path / "test_dir"
     test_dir.mkdir()  # Create real directory
@@ -108,14 +106,10 @@ def test_main_with_directory_small(
     mock_directory_handler.handle.assert_called_once_with(test_dir)
 
     assert result == 0
-    mock_subprocess_run.assert_called_once_with(
-        ["ls", "-la", "--color=auto", str(test_dir)], check=True
-    )
+    mock_subprocess_run.assert_called_once_with(["ls", "-la", "--color=auto", str(test_dir)], check=True)
 
 
-def test_main_with_directory_large(
-    tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
-) -> None:
+def test_main_with_directory_large(tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock) -> None:
     """Test main() with a directory path (large directory, uses less)."""
     test_dir = tmp_path / "test_dir_large"
     test_dir.mkdir()  # Create real directory
@@ -141,17 +135,13 @@ def test_main_with_directory_large(
 
             # Then run ls again and pipe to less
             with patch("os.get_terminal_size") as mock_terminal_size:
-                mock_terminal_size.return_value = os.terminal_size(
-                    (80, 24)
-                )  # 24 lines terminal
+                mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines terminal
 
                 # Configure second Popen call
                 mock_popen.return_value = mock_ls_proc
 
                 # Run less with ls output
-                mock_subprocess_run(
-                    ["less", "-R"], stdin=mock_ls_proc.stdout, check=True
-                )
+                mock_subprocess_run(["less", "-R"], stdin=mock_ls_proc.stdout, check=True)
                 mock_ls_proc.stdout.close()
                 mock_ls_proc.wait()
 
@@ -174,14 +164,10 @@ def test_main_with_directory_large(
     mock_directory_handler.handle.assert_called_once_with(test_dir)
 
     assert result == 0
-    mock_subprocess_run.assert_called_with(
-        ["less", "-R"], stdin=mock_ls_proc.stdout, check=True
-    )
+    mock_subprocess_run.assert_called_with(["less", "-R"], stdin=mock_ls_proc.stdout, check=True)
 
 
-def test_directory_handler_small_directory(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_directory_handler_small_directory(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Test DirectoryHandler with a small directory (direct output)."""
     from l_command.handlers.directory import DirectoryHandler
 
@@ -222,9 +208,7 @@ def test_directory_handler_small_directory(
         )
 
 
-def test_directory_handler_large_directory(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_directory_handler_large_directory(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Test DirectoryHandler with a large directory (uses less)."""
     from l_command.handlers.directory import DirectoryHandler
 
@@ -283,9 +267,7 @@ def test_directory_handler_large_directory(
         second_process.wait.assert_called_once()
 
 
-def test_default_file_handler_small_file(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_default_file_handler_small_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Test DefaultFileHandler with a small file (uses cat)."""
     from l_command.handlers.default import DefaultFileHandler
 
@@ -302,9 +284,7 @@ def test_default_file_handler_small_file(
         mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
 
         # Mock count_lines directly in the module where it's used
-        with patch(
-            "l_command.handlers.default.count_lines", return_value=10
-        ) as mock_count_lines:
+        with patch("l_command.handlers.default.count_lines", return_value=10) as mock_count_lines:
             # Call the handler
             DefaultFileHandler.handle(test_file)
 
@@ -318,9 +298,7 @@ def test_default_file_handler_small_file(
         )
 
 
-def test_default_file_handler_large_file(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_default_file_handler_large_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Test DefaultFileHandler with a large file (uses less)."""
     from l_command.handlers.default import DefaultFileHandler
 
@@ -337,9 +315,7 @@ def test_default_file_handler_large_file(
         mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
 
         # Mock count_lines directly in the module where it's used
-        with patch(
-            "l_command.handlers.default.count_lines", return_value=50
-        ) as mock_count_lines:
+        with patch("l_command.handlers.default.count_lines", return_value=50) as mock_count_lines:
             # Call the handler
             DefaultFileHandler.handle(test_file)
 
@@ -383,9 +359,7 @@ def test_json_handler_can_handle(tmp_path: Path) -> None:
     assert JsonHandler.can_handle(dir_path) is False
 
 
-def test_json_handler_small_valid_json(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_json_handler_small_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Test JsonHandler with a small valid JSON file."""
     from l_command.handlers.json import JsonHandler
 
@@ -408,9 +382,7 @@ def test_json_handler_small_valid_json(
         mock_stat.return_value = mock_stat_result
 
         # Mock count_lines directly in the module where it's used
-        with patch(
-            "l_command.handlers.json.count_lines", return_value=1
-        ) as mock_count_lines:
+        with patch("l_command.handlers.json.count_lines", return_value=1) as mock_count_lines:
             # Call the handler
             JsonHandler.handle(test_file)
 
@@ -431,9 +403,7 @@ def test_json_handler_small_valid_json(
         )
 
 
-def test_json_handler_large_valid_json(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_json_handler_large_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Test JsonHandler with a large valid JSON file."""
     from l_command.handlers.json import JsonHandler
 
@@ -463,9 +433,7 @@ def test_json_handler_large_valid_json(
         mock_popen.return_value = mock_process
 
         # Mock count_lines directly in the module where it's used
-        with patch(
-            "l_command.handlers.json.count_lines", return_value=52
-        ) as mock_count_lines:
+        with patch("l_command.handlers.json.count_lines", return_value=52) as mock_count_lines:
             # Call the handler
             JsonHandler.handle(test_file)
 
@@ -509,9 +477,7 @@ def test_json_handler_oversized_json(tmp_path: Path, monkeypatch: MonkeyPatch) -
 
     # Mock DefaultFileHandler.handle
     with (
-        patch(
-            "l_command.handlers.default.DefaultFileHandler.handle"
-        ) as mock_default_handle,
+        patch("l_command.handlers.default.DefaultFileHandler.handle") as mock_default_handle,
         patch("pathlib.Path.stat") as mock_stat,
     ):
         # Configure stat to return a large file size
@@ -537,9 +503,7 @@ def test_json_handler_invalid_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> 
     # Mock subprocess.run and DefaultFileHandler.handle
     with (
         patch("subprocess.run") as mock_run,
-        patch(
-            "l_command.handlers.default.DefaultFileHandler.handle"
-        ) as mock_default_handle,
+        patch("l_command.handlers.default.DefaultFileHandler.handle") as mock_default_handle,
         patch("pathlib.Path.stat") as mock_stat,
     ):
         # Configure stat to return a small file size
@@ -576,9 +540,7 @@ def test_json_handler_jq_not_found(tmp_path: Path, monkeypatch: MonkeyPatch) -> 
     # Mock subprocess.run and DefaultFileHandler.handle
     with (
         patch("subprocess.run") as mock_run,
-        patch(
-            "l_command.handlers.default.DefaultFileHandler.handle"
-        ) as mock_default_handle,
+        patch("l_command.handlers.default.DefaultFileHandler.handle") as mock_default_handle,
         patch("pathlib.Path.stat") as mock_stat,
     ):
         # Configure stat to return a small file size
@@ -635,9 +597,7 @@ def test_count_lines_with_error(tmp_path: Path, capsys: CaptureFixture) -> None:
     assert "Error counting lines" in captured.err
 
 
-def test_main_with_small_text_file(
-    tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
-) -> None:
+def test_main_with_small_text_file(tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock) -> None:
     """Test main() with a non-JSON file shorter than terminal height (uses cat)."""
     test_file = tmp_path / "small_file.txt"
     create_file(test_file, "\n".join(["line"] * 10))
@@ -665,9 +625,7 @@ def test_main_with_small_text_file(
     assert result == 0
 
 
-def test_main_with_large_text_file(
-    tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock
-) -> None:
+def test_main_with_large_text_file(tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock) -> None:
     """Test main() with a non-JSON file taller than terminal height (uses less)."""
     test_file = tmp_path / "large_file.txt"
     create_file(test_file, "\n".join(["line"] * 30))
@@ -700,9 +658,7 @@ def test_main_with_large_text_file(
         mock_default_handler.handle.assert_called_once_with(test_file)
 
     assert result == 0
-    mock_subprocess_run.assert_called_once_with(
-        ["less", "-RFX", str(test_file)], check=True
-    )
+    mock_subprocess_run.assert_called_once_with(["less", "-RFX", str(test_file)], check=True)
 
 
 def test_main_with_valid_small_json(
@@ -795,9 +751,7 @@ def test_main_with_valid_large_json_uses_less(
             return mock_jq_proc
         raise ValueError(f"Unexpected Popen call: {cmd} with kwargs {kwargs}")
 
-    def run_side_effect(
-        *args: Sequence[Any], **kwargs: dict[str, Any]
-    ) -> subprocess.CompletedProcess:
+    def run_side_effect(*args: Sequence[Any], **kwargs: dict[str, Any]) -> subprocess.CompletedProcess:
         cmd = args[0]
         # Check for 'jq empty' call
         if cmd == ["jq", "empty", str(test_file)]:
@@ -807,9 +761,7 @@ def test_main_with_valid_large_json_uses_less(
             return subprocess.CompletedProcess(args=cmd, returncode=0)
         # Check for 'less -R' call
         if cmd == ["less", "-R"]:
-            assert (
-                kwargs.get("stdin") == mock_jq_proc.stdout
-            )  # Check stdin is jq's stdout
+            assert kwargs.get("stdin") == mock_jq_proc.stdout  # Check stdin is jq's stdout
             assert kwargs.get("check") is True
             return subprocess.CompletedProcess(args=cmd, returncode=0)
         # Any other call to subprocess.run is unexpected in this flow
@@ -990,9 +942,7 @@ def test_main_with_invalid_json(
             mock_default_handler.handle(path)
 
     # Set up the side effect to raise CalledProcessError for jq empty
-    def run_side_effect(
-        *args: Sequence[Any], **kwargs: dict[str, Any]
-    ) -> subprocess.CompletedProcess:
+    def run_side_effect(*args: Sequence[Any], **kwargs: dict[str, Any]) -> subprocess.CompletedProcess:
         cmd = args[0]
         if cmd == ["jq", "empty", str(test_file)]:
             # Simulate jq validation failure
@@ -1085,9 +1035,7 @@ def test_main_with_jq_not_found(
             mock_default_handler.handle(path)
 
     # Set up the side effect to raise FileNotFoundError for jq
-    def run_side_effect(
-        *args: Sequence[Any], **kwargs: dict[str, Any]
-    ) -> subprocess.CompletedProcess:
+    def run_side_effect(*args: Sequence[Any], **kwargs: dict[str, Any]) -> subprocess.CompletedProcess:
         cmd = args[0]
         if cmd[0] == "jq":
             raise FileNotFoundError("jq not found")

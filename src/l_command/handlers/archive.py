@@ -27,9 +27,7 @@ class ArchiveHandler(FileHandler):
         if shutil.which("tar") is not None:
             if name.endswith(".tar.zst") and shutil.which("unzstd") is not None:
                 return True
-            if name.endswith(
-                (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
-            ):
+            if name.endswith((".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")):
                 return True
 
         return False
@@ -66,9 +64,7 @@ class ArchiveHandler(FileHandler):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                     )
-                    subprocess.run(
-                        ["less", "-R"], stdin=unzip_process.stdout, check=True
-                    )
+                    subprocess.run(["less", "-R"], stdin=unzip_process.stdout, check=True)
                     unzip_process.stdout.close()
                     unzip_retcode = unzip_process.wait()
                     if unzip_retcode != 0:
@@ -93,17 +89,13 @@ class ArchiveHandler(FileHandler):
                     ]
 
                 # First subprocess call to count lines
-                process = subprocess.Popen(
-                    command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
+                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 stdout, _ = process.communicate()
                 line_count = stdout.decode("utf-8").count("\n")
 
                 # Second subprocess call to display content
                 if line_count > terminal_height:
-                    tar_process = subprocess.Popen(
-                        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                    )
+                    tar_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     subprocess.run(["less", "-R"], stdin=tar_process.stdout, check=True)
                     tar_process.stdout.close()
                     tar_retcode = tar_process.wait()

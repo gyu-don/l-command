@@ -68,9 +68,7 @@ def test_handle_tar_zst(mocker: "MockerFixture") -> None:
     mocker.patch("shutil.which", side_effect=["/usr/bin/tar", "/usr/bin/unzstd"])
     mocker.patch("l_command.handlers.archive.subprocess.run")
     ArchiveHandler.handle(path)
-    subprocess.run.assert_called_with(
-        ["tar", "--use-compress-program=unzstd", "-tvf", str(path)], check=True
-    )
+    subprocess.run.assert_called_with(["tar", "--use-compress-program=unzstd", "-tvf", str(path)], check=True)
 
 
 def test_handle_zip_with_less(mocker: "MockerFixture") -> None:
@@ -81,14 +79,10 @@ def test_handle_zip_with_less(mocker: "MockerFixture") -> None:
 
     mock_process = mocker.Mock()
     mock_stdout = mocker.Mock()
-    mock_stdout.__iter__ = lambda self: iter(
-        [b"line\n"] * 50
-    )  # Simulate 50 lines of output
+    mock_stdout.__iter__ = lambda self: iter([b"line\n"] * 50)  # Simulate 50 lines of output
     mock_process.stdout = mock_stdout
     mock_process.communicate.return_value = (b"line\n" * 50, None)
-    mocker.patch(
-        "l_command.handlers.archive.subprocess.Popen", return_value=mock_process
-    )
+    mocker.patch("l_command.handlers.archive.subprocess.Popen", return_value=mock_process)
 
     ArchiveHandler.handle(path)
 
@@ -103,14 +97,10 @@ def test_handle_tar_with_less(mocker: "MockerFixture") -> None:
 
     mock_process = mocker.Mock()
     mock_stdout = mocker.Mock()
-    mock_stdout.__iter__ = lambda self: iter(
-        [b"line\n"] * 50
-    )  # Simulate 50 lines of output
+    mock_stdout.__iter__ = lambda self: iter([b"line\n"] * 50)  # Simulate 50 lines of output
     mock_process.stdout = mock_stdout
     mock_process.communicate.return_value = (b"line\n" * 50, None)
-    mocker.patch(
-        "l_command.handlers.archive.subprocess.Popen", return_value=mock_process
-    )
+    mocker.patch("l_command.handlers.archive.subprocess.Popen", return_value=mock_process)
 
     ArchiveHandler.handle(path)
 
