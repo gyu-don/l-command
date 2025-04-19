@@ -1,253 +1,349 @@
-# 実装例
+# Implementation Examples
 
-このドキュメントでは、`l`コマンドの拡張実装例を提供します。
+This document provides examples of extending the `l` command with new handlers.
 
-## YAMLファイル対応の実装例
+## YAML File Handler Implementation Example
 
-以下は、YAMLファイルを処理するための実装例です。
+Below is an example of a handler for YAML files using the current handler-based architecture:
 
 ```python
-from pathlib import Path
-import subprocess
+"""
+Handler for processing YAML files.
+"""
+
 import os
+import shutil
+import subprocess
 import sys
-from typing import Optional
+from pathlib import Path
 
 from l_command.constants import YAML_CONTENT_CHECK_BYTES, MAX_YAML_SIZE_BYTES
+from l_command.handlers.base import FileHandler
+from l_command.utils import count_lines
 
-def should_try_yq(file_path: Path) -> bool:
-    """Determine if a file is likely YAML and should be processed with yq."""
-    # 拡張子による判定
-    if file_path.suffix.lower() in [".yaml", ".yml"]:
-        try:
-            if file_path.stat().st_size == 0:
-                return False
-        except OSError:
+
+class YamlHandler(FileHandler):
+    """Handler for YAML files."""
+
+    @classmethod
+    def can_handle(cls, path: Path) -> bool:
+        """Check if the path is a YAML file.
+
+        Args:
+            path: The path to check.
+
+        Returns:
+            True if the path is a YAML file, False otherwise.
+        """
+        if not path.is_file():
             return False
-        return True
 
-    # コンテンツによる判定（オプション）
-    try:
-        with file_path.open("rb") as f:
-            content_start = f.read(YAML_CONTENT_CHECK_BYTES)
-            if not content_start:
-                return False
+        # Check by extension
+        if path.suffix.lower() in [".yaml", ".yml"]:
             try:
-                content_text = content_start.decode("utf-8").strip()
-                # YAMLの特徴的なパターンを検出
-                if ":" in content_text and not content_text.startswith("{"):
-                    return True
-            except UnicodeDecodeError:
-                pass
-    except OSError:
-        pass
+                if path.stat().st_size == 0:
+                    return False
+            except OSError:
+                return False  # Cannot stat, likely doesn't exist or permission error
+            return True
 
-    return False
-
-def display_yaml_with_yq(file_path: Path) -> None:
-    """Display YAML file using yq with appropriate formatting."""
-    try:
-        file_size = file_path.stat().st_size
-        if file_size == 0:
-            print("(Empty file)")
-            return
-
-        if file_size > MAX_YAML_SIZE_BYTES:
-            print(
-                f"File size ({file_size} bytes) exceeds limit "
-                f"({MAX_YAML_SIZE_BYTES} bytes). "
-                f"Falling back to default viewer.",
-                file=sys.stderr,
-            )
-            display_file_default(file_path)
-            return
-
-        # YAMLの構文確認（オプション）
+        # Check by content
         try:
-            subprocess.run(
-                ["yq", ".", str(file_path)],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-            )
-        except FileNotFoundError:
-            print("yq command not found. Falling back to default viewer.", file=sys.stderr)
-            display_file_default(file_path)
-            return
-        except subprocess.CalledProcessError as e:
-            print(
-                f"File identified as YAML but failed validation: {e.stderr.decode('utf-8', errors='replace')}. "
-                "Falling back to default viewer.",
-                file=sys.stderr,
-            )
-            display_file_default(file_path)
-            return
-
-        # ターミナルの高さ取得とページング処理
-        try:
-            terminal_height = os.get_terminal_size().lines
+            with path.open("rb") as f:
+                content_start = f.read(YAML_CONTENT_CHECK_BYTES)
+                if not content_start:
+                    return False
+                try:
+                    content_text = content_start.decode("utf-8").strip()
+                    # Detect YAML-specific patterns
+                    if ":" in content_text and not content_text.startswith(("{", "[")):
+                        return True
+                except UnicodeDecodeError:
+                    pass
         except OSError:
-            terminal_height = float("inf")
+            pass
 
-        line_count = count_lines(file_path)
+        return False
 
+    @classmethod
+    def handle(cls, path: Path) -> None:
+        """Display YAML file using yq with fallbacks.
+
+        Args:
+            path: The YAML file path to display.
+        """
         try:
-            if line_count > terminal_height:
-                # lessを使ってページング
-                yq_process = subprocess.Popen(
-                    ["yq", ".", str(file_path)],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                subprocess.run(
-                    ["less", "-R"],
-                    stdin=yq_process.stdout,
-                    check=True,
-                )
-                yq_process.stdout.close()
-                yq_retcode = yq_process.wait()
-                if yq_retcode != 0:
-                    print(f"yq process exited with code {yq_retcode}", file=sys.stderr)
-                    display_file_default(file_path)
-            else:
-                # 直接表示
-                subprocess.run(["yq", ".", str(file_path)], check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Error displaying YAML with yq: {e}", file=sys.stderr)
-            display_file_default(file_path)
-        except OSError as e:
-            print(f"Error running yq command: {e}", file=sys.stderr)
-            display_file_default(file_path)
+            file_size = path.stat().st_size
+            if file_size == 0:
+                print("(Empty file)")
+                return
 
-    except OSError as e:
-        print(f"Error accessing file stats for YAML processing: {e}", file=sys.stderr)
-        display_file_default(file_path)
+            if file_size > MAX_YAML_SIZE_BYTES:
+                print(
+                    f"File size ({file_size} bytes) exceeds limit "
+                    f"({MAX_YAML_SIZE_BYTES} bytes). "
+                    f"Falling back to default viewer.",
+                    file=sys.stderr,
+                )
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+                return
+
+            # Check if yq is available
+            if not shutil.which("yq"):
+                print("yq command not found. Falling back to default viewer.", file=sys.stderr)
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+                return
+
+            # Count lines to determine whether to use less
+            line_count = count_lines(path)
+
+            # Get terminal height
+            try:
+                terminal_height = os.get_terminal_size().lines
+            except OSError:
+                terminal_height = float("inf")  # Always use direct output
+
+            # Display YAML with yq
+            try:
+                if line_count > terminal_height:
+                    # For YAML files taller than terminal, use less with color
+                    yq_process = subprocess.Popen(
+                        ["yq", ".", str(path)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                    subprocess.run(
+                        ["less", "-R"],  # -R preserves color codes
+                        stdin=yq_process.stdout,
+                        check=True,
+                    )
+                    yq_process.stdout.close()
+                    # Check if yq process failed
+                    yq_retcode = yq_process.wait()
+                    if yq_retcode != 0:
+                        print(f"yq process exited with code {yq_retcode}", file=sys.stderr)
+                        from l_command.handlers.default import DefaultFileHandler
+
+                        DefaultFileHandler.handle(path)
+                else:
+                    # For small YAML files, display directly
+                    subprocess.run(["yq", ".", str(path)], check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error displaying YAML with yq: {e}", file=sys.stderr)
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+            except OSError as e:
+                print(f"Error running yq command: {e}", file=sys.stderr)
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+
+        except OSError as e:
+            print(f"Error accessing file stats for YAML processing: {e}", file=sys.stderr)
+            from l_command.handlers.default import DefaultFileHandler
+
+            DefaultFileHandler.handle(path)
+
+    @classmethod
+    def priority(cls) -> int:
+        """Return the priority of the YAML handler.
+
+        Returns:
+            70 (medium-high priority, between JSON and Archive).
+        """
+        return 70  # YAML has higher priority than JSON but lower than Archive
 ```
 
-## CSVファイル対応の実装例
+## CSV File Handler Implementation Example
 
-以下は、CSVファイルを処理するための実装例です。
+Below is an example of a handler for CSV files:
 
 ```python
-def should_try_csv_formatter(file_path: Path) -> bool:
-    """Determine if a file is likely CSV and should be formatted."""
-    # 拡張子による判定
-    if file_path.suffix.lower() in [".csv", ".tsv"]:
-        try:
-            if file_path.stat().st_size == 0:
-                return False
-        except OSError:
+"""
+Handler for processing CSV and TSV files.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from l_command.handlers.base import FileHandler
+from l_command.utils import count_lines
+
+
+class CsvHandler(FileHandler):
+    """Handler for CSV and TSV files."""
+
+    @classmethod
+    def can_handle(cls, path: Path) -> bool:
+        """Check if the path is a CSV or TSV file.
+
+        Args:
+            path: The path to check.
+
+        Returns:
+            True if the path is a CSV or TSV file, False otherwise.
+        """
+        if not path.is_file():
             return False
-        return True
 
-    # コンテンツによる判定（オプション）
-    try:
-        with file_path.open("rb") as f:
-            content_start = f.read(1024)
-            if not content_start:
-                return False
+        # Check by extension
+        if path.suffix.lower() in [".csv", ".tsv"]:
             try:
-                content_text = content_start.decode("utf-8")
-                # カンマが多数ある行を検出
-                lines = content_text.split("\n")
-                if len(lines) >= 2:
-                    commas_in_first_line = lines[0].count(",")
-                    if commas_in_first_line >= 2:
-                        # 2行目も同じようなカンマ数か確認
-                        if len(lines) > 1 and abs(lines[1].count(",") - commas_in_first_line) <= 1:
-                            return True
-            except UnicodeDecodeError:
-                pass
-    except OSError:
-        pass
+                if path.stat().st_size == 0:
+                    return False
+            except OSError:
+                return False
+            return True
 
-    return False
-
-def display_csv_with_column(file_path: Path) -> None:
-    """Display CSV file using column command for better formatting."""
-    delimiter = "," if file_path.suffix.lower() == ".csv" else "\t"
-
-    try:
-        file_size = file_path.stat().st_size
-        if file_size == 0:
-            print("(Empty file)")
-            return
-
-        if file_size > 5 * 1024 * 1024:  # 5MB
-            print(
-                f"File size ({file_size} bytes) exceeds limit. "
-                f"Falling back to default viewer.",
-                file=sys.stderr,
-            )
-            display_file_default(file_path)
-            return
-
-        # ターミナルの高さ取得とページング処理
+        # Check by content
         try:
-            terminal_height = os.get_terminal_size().lines
+            with path.open("rb") as f:
+                content_start = f.read(1024)
+                if not content_start:
+                    return False
+                try:
+                    content_text = content_start.decode("utf-8")
+                    # Detect lines with many commas
+                    lines = content_text.split("\n")
+                    if len(lines) >= 2:
+                        commas_in_first_line = lines[0].count(",")
+                        if commas_in_first_line >= 2:
+                            # Check if second line has similar comma count
+                            if len(lines) > 1 and abs(lines[1].count(",") - commas_in_first_line) <= 1:
+                                return True
+                except UnicodeDecodeError:
+                    pass
         except OSError:
-            terminal_height = float("inf")
+            pass
 
-        line_count = count_lines(file_path)
+        return False
+
+    @classmethod
+    def handle(cls, path: Path) -> None:
+        """Display CSV file using column command for better formatting.
+
+        Args:
+            path: The CSV file path to display.
+        """
+        delimiter = "," if path.suffix.lower() == ".csv" else "\t"
 
         try:
-            if line_count > terminal_height:
-                # lessを使ってページング
-                column_process = subprocess.Popen(
-                    ["column", "-t", "-s", delimiter, str(file_path)],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                subprocess.run(
-                    ["less", "-S"],  # -Sは横スクロールを可能にする
-                    stdin=column_process.stdout,
-                    check=True,
-                )
-                column_process.stdout.close()
-                column_retcode = column_process.wait()
-                if column_retcode != 0:
-                    print(f"column process exited with code {column_retcode}", file=sys.stderr)
-                    display_file_default(file_path)
-            else:
-                # 直接表示
-                subprocess.run(["column", "-t", "-s", delimiter, str(file_path)], check=True)
-        except FileNotFoundError:
-            print("column command not found. Falling back to default viewer.", file=sys.stderr)
-            display_file_default(file_path)
-        except subprocess.CalledProcessError as e:
-            print(f"Error displaying CSV with column: {e}", file=sys.stderr)
-            display_file_default(file_path)
-        except OSError as e:
-            print(f"Error running column command: {e}", file=sys.stderr)
-            display_file_default(file_path)
+            file_size = path.stat().st_size
+            if file_size == 0:
+                print("(Empty file)")
+                return
 
-    except OSError as e:
-        print(f"Error accessing file stats for CSV processing: {e}", file=sys.stderr)
-        display_file_default(file_path)
+            # Size limit for CSV processing
+            if file_size > 5 * 1024 * 1024:  # 5MB
+                print(
+                    f"File size ({file_size} bytes) exceeds limit. "
+                    f"Falling back to default viewer.",
+                    file=sys.stderr,
+                )
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+                return
+
+            # Check if column command is available
+            if not shutil.which("column"):
+                print("column command not found. Falling back to default viewer.", file=sys.stderr)
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+                return
+
+            # Get terminal height
+            try:
+                terminal_height = os.get_terminal_size().lines
+            except OSError:
+                terminal_height = float("inf")  # Always use direct output
+
+            line_count = count_lines(path)
+
+            try:
+                if line_count > terminal_height:
+                    # For CSV files taller than terminal, use less with horizontal scroll
+                    column_process = subprocess.Popen(
+                        ["column", "-t", "-s", delimiter, str(path)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                    subprocess.run(
+                        ["less", "-S"],  # -S enables horizontal scrolling
+                        stdin=column_process.stdout,
+                        check=True,
+                    )
+                    column_process.stdout.close()
+                    column_retcode = column_process.wait()
+                    if column_retcode != 0:
+                        print(f"column process exited with code {column_retcode}", file=sys.stderr)
+                        from l_command.handlers.default import DefaultFileHandler
+
+                        DefaultFileHandler.handle(path)
+                else:
+                    # For small CSV files, display directly
+                    subprocess.run(["column", "-t", "-s", delimiter, str(path)], check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error displaying CSV with column: {e}", file=sys.stderr)
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+            except OSError as e:
+                print(f"Error running column command: {e}", file=sys.stderr)
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+
+        except OSError as e:
+            print(f"Error accessing file stats for CSV processing: {e}", file=sys.stderr)
+            from l_command.handlers.default import DefaultFileHandler
+
+            DefaultFileHandler.handle(path)
+
+    @classmethod
+    def priority(cls) -> int:
+        """Return the priority of the CSV handler.
+
+        Returns:
+            40 (medium priority, lower than JSON).
+        """
+        return 40  # CSV has lower priority than JSON
 ```
 
-## 実装のためのチェックリスト
+## Implementation Checklist
 
-新しいファイルタイプハンドラを追加する際のチェックリスト：
+When adding a new file type handler, follow this checklist:
 
-1. **定数の追加**:
-   - `constants.py` に必要な定数を追加（サイズ制限など）
+1. **Add Constants**:
+   - Add necessary constants to `constants.py` (size limits, etc.)
 
-2. **検出関数の実装**:
-   - 拡張子による検出
-   - コンテンツによる検出（オプション）
-   - エラーハンドリング
+2. **Create Handler Class**:
+   - Create a new class that inherits from `FileHandler`
+   - Implement `can_handle()` method:
+     - Extension-based detection
+     - Content-based detection (optional)
+     - Error handling
+   - Implement `handle()` method:
+     - Size checks
+     - External command existence checks
+     - Paging processing (as needed)
+     - Error handling and fallbacks
+   - Implement `priority()` method:
+     - Choose an appropriate priority relative to existing handlers
 
-3. **表示関数の実装**:
-   - サイズチェック
-   - 外部コマンドの存在確認
-   - ページング処理（必要に応じて）
-   - エラーハンドリングとフォールバック
+3. **Register Handler**:
+   - Add the handler to the list in `handlers/__init__.py`
 
-4. **メイン関数の更新**:
-   - 新しい条件分岐の追加
-
-5. **テストの作成**:
-   - 検出関数のテスト
-   - 表示関数のテスト（モックを使用）
-   - エラーケースのテスト
+4. **Create Tests**:
+   - Test the detection method
+   - Test the display method (using mocks)
+   - Test error cases

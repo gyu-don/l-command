@@ -1,333 +1,221 @@
-# The L Command - シンプル実装計画
+# The L Command - Implementation Plan
 
-## プロジェクト概要
+## Project Status
 
-README.mdから理解できること:
+The L Command has evolved from the initial MVP plan to a more structured, handler-based architecture. This document outlines the current implementation and future plans.
 
-1. `l` コマンドは、ターゲットに基づいて `less`、`cat`、または `ls` を適切に使い分ける
-2. MVPでは以下を実装する:
-   - ファイルとディレクトリの区別
-   - 大きなファイル（50行以上または5KB以上）には `less` を使用
-   - 小さなファイルには `cat` を使用
-   - ディレクトリには `ls` を使用
-3. 標準入力の処理をサポート
-
-## シンプルなアーキテクチャ
+## Current Architecture
 
 ```mermaid
 graph TD
-    CLI["CLI (cli.py)"] --> Core["Core Logic (core.py)"]
-    Core --> PathAnalyzer["PathAnalyzer"]
-    PathAnalyzer --> FileHandler["ファイル処理"]
-    PathAnalyzer --> DirHandler["ディレクトリ処理"]
-    PathAnalyzer --> StdinHandler["標準入力処理"]
+    CLI["CLI (cli.py)"] --> Handlers["Handler System"]
+    Handlers --> DirectoryHandler["Directory Handler"]
+    Handlers --> JsonHandler["JSON Handler"]
+    Handlers --> ArchiveHandler["Archive Handler"]
+    Handlers --> BinaryHandler["Binary Handler"]
+    Handlers --> DefaultHandler["Default File Handler"]
 
-    FileHandler -- "サイズに基づいて選択" --> Cat["cat (小さいファイル)"]
-    FileHandler -- "サイズに基づいて選択" --> Less["less (大きいファイル)"]
-    DirHandler --> LS["ls (ディレクトリ)"]
-    StdinHandler --> Less
+    DirectoryHandler --> LS["ls -la --color=auto"]
+    JsonHandler --> JQ["jq + less"]
+    ArchiveHandler --> ArchiveTools["unzip -l / tar -tvf"]
+    BinaryHandler --> Hexdump["hexdump -C"]
+    DefaultHandler --> CatLess["cat / less"]
 ```
 
-## MVPのプロジェクト構造
+## Current Project Structure
 
 ```
 l-command/
 ├── README.md
 ├── LICENSE
-├── pyproject.toml       # プロジェクトメタデータ、ビルド設定
-├── setup.py             # 後方互換性のため
+├── CONTRIBUTING.md
+├── pyproject.toml       # Project metadata, build settings
 ├── src/
 │   └── l_command/
 │       ├── __init__.py
-│       ├── cli.py           # コマンドラインインターフェースのエントリーポイント
-│       ├── core.py          # パス分析とディスパッチのコアロジック
-│       └── constants.py     # 定数（閾値など）
-└── tests/                   # 単体テストと統合テスト
+│       ├── cli.py           # CLI entry point
+│       ├── constants.py     # Constants
+│       ├── utils.py         # Utility functions
+│       └── handlers/        # File type handlers
+│           ├── __init__.py
+│           ├── base.py      # Base handler class
+│           ├── default.py   # Default file handler
+│           ├── directory.py # Directory handler
+│           ├── json.py      # JSON handler
+│           ├── archive.py   # Archive handler
+│           └── binary.py    # Binary handler
+└── tests/                   # Unit and integration tests
 ```
 
-## 実装詳細
-
-### コア処理フロー
+## Execution Flow
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI as CLIエントリーポイント
-    participant Core as コアロジック
-    participant OS as オペレーティングシステム
+    participant CLI as CLI Entry Point
+    participant Handlers as Handler System
+    participant OS as Operating System
 
     User->>CLI: l myfile.txt
-    CLI->>Core: analyze_path("myfile.txt")
-    Core->>OS: is_file/is_dir チェック
-    OS-->>Core: "myfile.txt" はファイル
-    Core->>OS: ファイルサイズ確認
-    OS-->>Core: ファイルサイズ
-    Core->>OS: 行数カウント
-    OS-->>Core: 行数
+    CLI->>Handlers: Find handler for "myfile.txt"
+    Handlers->>OS: Check file type
+    OS-->>Handlers: File type information
 
-    alt ファイルが小さい
-        Core->>OS: "cat myfile.txt" 実行
-        OS-->>User: ファイル内容
-    else ファイルが大きい
-        Core->>OS: "less myfile.txt" 実行
-        OS-->>User: ページング表示されたファイル内容
+    alt Directory
+        Handlers->>OS: Run ls -la --color=auto
+    else JSON File
+        Handlers->>OS: Run jq (with less if needed)
+    else Archive File
+        Handlers->>OS: Run unzip -l or tar -tvf
+    else Binary File
+        Handlers->>OS: Run hexdump -C
+    else Regular File
+        Handlers->>OS: Run cat or less based on file size
     end
+
+    OS-->>User: Display content
 ```
 
-### コード概要
+## Implemented Features
 
-#### cli.py
+1. **Handler-Based Architecture**
+   - Modular system with prioritized handlers
+   - Each handler implements `can_handle()` and `handle()` methods
+   - Easy to extend with new file type handlers
 
-コマンドラインインターフェースのエントリーポイント:
+2. **File Type Support**
+   - Directory listing with `ls -la --color=auto`
+   - JSON file detection and formatting with `jq`
+   - Archive file listing (ZIP, TAR, etc.)
+   - Binary file display with `hexdump`
+   - Regular file display with `cat` or `less` based on file size
 
-```python
-#!/usr/bin/env python3
-import sys
-import argparse
-from l_command.core import analyze_path
+3. **Smart Detection**
+   - Extension-based detection
+   - Content-based detection for files without extensions
+   - Terminal height detection for appropriate paging
 
-def main():
-    parser = argparse.ArgumentParser(description='スマートなファイル・ディレクトリビューア')
-    parser.add_argument('path', nargs='?', default=None, help='表示するファイルまたはディレクトリパス')
-    parser.add_argument('-v', '--version', action='store_true', help='バージョン情報を表示')
-    args = parser.parse_args()
+4. **Error Handling**
+   - Graceful fallbacks when tools are missing
+   - Appropriate error messages
+   - Size limit checks to prevent performance issues
 
-    if args.version:
-        print("l command v0.1.0")
-        return 0
+## Future Development Plans
 
-    # 標準入力があるか確認
-    if not sys.stdin.isatty():
-        return analyze_path(None)  # Noneは標準入力を意味する
+### Phase 1: Additional File Type Handlers
 
-    # パスが指定されていなければカレントディレクトリを使用
-    path = args.path or '.'
-    return analyze_path(path)
+1. **YAML Handler** (1 day)
+   - Detection by extension (.yml, .yaml) and content
+   - Formatting with `yq`
+   - Fallback to default handler if `yq` is not available
 
-if __name__ == '__main__':
-    sys.exit(main())
-```
+2. **Markdown Handler** (1 day)
+   - Detection by extension (.md, .markdown)
+   - Rendering with `glow` or `mdcat`
+   - Fallback to default handler if renderer is not available
 
-#### core.py
+3. **CSV/TSV Handler** (1 day)
+   - Detection by extension (.csv, .tsv) and content
+   - Formatting with `column -t -s,`
+   - Horizontal scrolling support with `less -S`
 
-コアロジック:
+### Phase 2: Configuration System
 
-```python
-import os
-import sys
-import subprocess
-from l_command.constants import SIZE_THRESHOLD, LINE_THRESHOLD
+1. **Configuration File Support** (2 days)
+   - TOML configuration file
+   - System, user, and project-specific configurations
+   - Handler-specific settings
 
-def analyze_path(path):
-    """
-    パスを分析し、適切なコマンドで表示する
+2. **Command Line Options** (1 day)
+   - Force specific handler with flags (e.g., `--json`, `--binary`)
+   - Override default behavior (e.g., `--no-color`, `--raw`)
+   - Version and help information
 
-    Args:
-        path: 表示するパス。Noneの場合は標準入力を処理
+### Phase 3: Advanced Features
 
-    Returns:
-        int: 終了コード
-    """
-    # 標準入力の処理
-    if path is None:
-        return handle_stdin()
+1. **Plugin System** (3 days)
+   - Plugin discovery and loading
+   - Plugin API definition
+   - Sample plugins
 
-    # ディレクトリの処理
-    if os.path.isdir(path):
-        return handle_directory(path)
+2. **Enhanced Display Options** (2 days)
+   - Syntax highlighting for code files using `bat`
+   - Image preview in terminal with `viu` or similar
+   - PDF metadata/preview with `pdftotext`
 
-    # ファイルの処理
-    if os.path.isfile(path):
-        return handle_file(path)
+3. **Performance Optimizations** (2 days)
+   - Streaming for large files
+   - Caching for repeated access
+   - Parallel processing for multiple files
 
-    # パスが存在しない場合
-    print(f"Error: Path not found: {path}")
-    return 1
+## Technical Considerations
 
-def handle_stdin():
-    """標準入力を処理する"""
-    # 標準入力を less にパイプ
-    process = subprocess.run(['less'], stdin=sys.stdin)
-    return process.returncode
+1. **Cross-Platform Compatibility**
+   - Use `shutil.which()` to find executables
+   - Handle path differences between Windows and Unix
+   - Provide fallbacks for platform-specific tools
 
-def handle_directory(path):
-    """ディレクトリを処理する"""
-    # ls コマンドで表示
-    process = subprocess.run(['ls', '-la', path])
-    return process.returncode
+2. **Error Handling**
+   - Gracefully handle missing dependencies
+   - Provide helpful error messages
+   - Implement appropriate fallbacks
 
-def handle_file(path):
-    """ファイルを処理する"""
-    # ファイルサイズを取得
-    file_size = os.path.getsize(path)
+3. **Performance**
+   - Efficiently check file size without loading entire file
+   - Efficient line counting
+   - Streaming for large files
 
-    # 行数をカウント
-    line_count = count_lines(path)
+4. **Security**
+   - Avoid shell injection in external command execution
+   - Validate user input
+   - Handle file permissions appropriately
 
-    # サイズまたは行数に基づいて cat か less を選択
-    if file_size < SIZE_THRESHOLD and line_count < LINE_THRESHOLD:
-        process = subprocess.run(['cat', path])
-    else:
-        process = subprocess.run(['less', path])
+## Next Steps
 
-    return process.returncode
+1. Implement YAML, Markdown, and CSV handlers
+2. Add configuration system
+3. Enhance documentation
+4. Add more tests to improve coverage
+5. Implement plugin system
 
-def count_lines(path):
-    """ファイルの行数を効率的にカウントする"""
-    lines = 0
-    with open(path, 'rb') as f:
-        for _ in f:
-            lines += 1
-    return lines
-```
+## Configuration System Design
 
-#### constants.py
-
-定数と設定:
-
-```python
-# ファイルサイズの閾値 (5KB)
-SIZE_THRESHOLD = 5 * 1024
-
-# 行数の閾値
-LINE_THRESHOLD = 50
-```
-
-## 実装計画
-
-### フェーズ1: MVP (Minimum Viable Product)
-
-1. **プロジェクト構造のセットアップ** (0.5日)
-   - プロジェクトの基本構造を作成
-   - ビルド設定を構成
-
-2. **コア機能** (1.5日)
-   - パス分析の実装
-   - ファイルサイズ/行数検出の実装
-   - ファイル、ディレクトリ、標準入力の基本ハンドラの実装
-
-3. **テストと文書化** (1日)
-   - 単体テストの作成
-   - コードドキュメント
-   - READMEの更新
-
-4. **パッケージング** (1日)
-   - Pythonホイールの作成
-   - インストールと基本機能のテスト
-
-### フェーズ2: 将来の拡張（MVP完了後）
-
-1. **基本的な設定システム** (1日)
-   - 設定ファイルの追加（TOML形式）
-   - 動作の設定可能化
-
-2. **色付き出力サポート** (1日)
-   - ディレクトリリストの色付け
-   - テキストファイルの構文強調表示
-
-3. **モジュール構造へのリファクタリング** (1日)
-   - 分離したハンドラモジュールの作成
-   - より拡張性の高いアーキテクチャへの移行
-
-4. **特殊ファイルタイプハンドラ** (2-3日)
-   - JSONフォーマット（jqを使用）
-   - YAMLフォーマット
-   - Markdownレンダリング
-   - CSV/TSVテーブルフォーマット
-
-5. **プラグインシステム** (2-3日)
-   - プラグインの発見とロードの実装
-   - プラグインAPIの定義
-   - サンプルプラグインの作成
-
-## 技術的考慮事項
-
-1. **クロスプラットフォーム互換性**
-   - 実行ファイルを見つけるために `shutil` を使用
-   - WindowsとUnix間のパスの違いを処理
-
-2. **エラー処理**
-   - 依存関係の欠如を適切に処理
-   - 役立つエラーメッセージの提供
-
-3. **パフォーマンス**
-   - ファイル全体を読み込まずにファイルサイズを効率的に確認
-   - ファイル行数の効率的なカウント
-
-4. **セキュリティ**
-   - 外部コマンド実行時のシェルインジェクションを回避
-
-## 次のステップ
-
-1. プロジェクト初期構造の作成
-2. コアMVP機能の実装
-3. テストと文書化の追加
-4. Pythonホイールとしてパッケージ化
-
-## 将来の拡張計画
-
-MVPが完成した後の拡張計画として、以下のプラグインシステムと設定管理の仕組みが考えられます。
-
-### プラグインのTOML設定
-
-プラグインは将来的にTOML設定ファイルを通じて管理できるようにします:
+The configuration system will use TOML files with the following structure:
 
 ```toml
-[plugins]
-# プラグインシステムの有効/無効
-enabled = true
+[general]
+default_handler = "auto"  # auto, text, binary, etc.
+color = true
+max_file_size = 10485760  # 10MB
 
-# プラグイン検索パス（デフォルトパスに追加）
-paths = [
-    "/custom/plugin/path",
-    "~/my-l-plugins"
-]
+[handlers]
+# Enable/disable specific handlers
+directory = true
+json = true
+archive = true
+binary = true
+yaml = true
+markdown = true
+csv = true
 
-# プラグイン固有の設定
-[plugins.json]
-enabled = true
-pretty_print = true
-max_preview_size = 10240
+# Handler-specific settings
+[handlers.json]
+max_size = 10485760  # 10MB
 jq_path = "/usr/bin/jq"
+jq_args = ["."]
 
-[plugins.markdown]
-enabled = true
-renderer = "glow"  # "glow", "mdcat" などから選択
-theme = "dark"
-
-[plugins.archive]
-enabled = true
+[handlers.archive]
 list_nested = true
 max_depth = 3
+
+[handlers.markdown]
+renderer = "glow"  # glow, mdcat, etc.
+theme = "dark"
 ```
 
-### 設定ファイルの検索順序
+Configuration files will be searched in the following order:
+1. System-wide: `/etc/l_command/config.toml`
+2. User-specific: `~/.config/l_command/config.toml`
+3. Project-specific: `./.l_command.toml`
 
-設定ファイルは以下の順序で検索し、後に見つかった設定が優先されるようにします:
-
-1. システム全体の設定: `/etc/l_command/config.toml`
-2. ユーザー固有の設定: `~/.config/l_command/config.toml`
-3. プロジェクト固有の設定: `./.l_command.toml`
-
-複数の設定ファイルがある場合は、プロジェクト > ユーザー > システムの優先順位でマージされます。
-
-## 拡張機能（将来像）
-
-- カラー出力サポート（`ls` のカラー、`less` のシンタックスハイライト）
-- JSON以外の形式（YAML / Markdown など）の自動整形表示
-  - 大きなファイルのサンプル表示（例: `.[:10]` などの形式）
-  - ページネーションやカラム表示の自動最適化（端末サイズに応じて）
-  - シンボリックリンクの解決・表示オプション
-  - Git リポジトリ内では `git ls-files` にフォールバック
-  - テキストファイルとバイナリファイルの適切な処理：
-    - **シンタックスハイライト系（テキストファイル）**
-        - `bat` による構文強調表示（.sh, .py, .js, .json, .yml など）
-        - `glow` や `mdcat` による Markdown 表示
-        - `yq` による YAML 整形・構造表示
-        - `.csv`, `.tsv` ファイルには `column -t -s,` による表形式整形表示
-        - `.log` ファイルにはカラーフィルタ（`ccze`, `grc`, `lnav` など）を通して視認性向上
-    - **バイナリ対応系（非テキストファイル）**
-        - `xxd`, `hexdump` による16進表示
-        - `file` でバイナリ検出後、画像なら `viu`、PDFなら `pdftotext`、音声/動画なら `mediainfo` を利用
-        - `.zip`, `.tar.gz` などのアーカイブは `unzip -l`, `tar -tzf` などで中身一覧表示
-        - バイナリファイルには自動でメタ情報だけを表示
+When multiple configuration files exist, they will be merged with project > user > system priority.

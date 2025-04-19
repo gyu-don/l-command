@@ -1,185 +1,220 @@
-# 開発者ガイド
+# Developer Guide
 
-このドキュメントは、`l`コマンドの開発者向けの詳細な情報を提供します。
+This document provides detailed information for developers working on the `l` command.
 
-## プロジェクトアーキテクチャ
+## Project Architecture
 
-### 全体構造
+### Overall Structure
 
-`l`コマンドは以下の主要なコンポーネントで構成されています：
+The `l` command consists of the following main components:
 
-- **CLI インターフェース** (`cli.py`): コマンドライン引数の解析と処理のエントリーポイント
-- **定数モジュール** (`constants.py`): 設定値と定数の定義
-- **ハンドラ**: 各種ファイルタイプやディレクトリの処理
+- **CLI Interface** (`cli.py`): Entry point for parsing command line arguments and processing
+- **Constants Module** (`constants.py`): Definition of configuration values and constants
+- **Utilities** (`utils.py`): Common utility functions
+- **Handlers**: A modular system for processing different file types and directories
 
-### 動作フロー
+### Handler Architecture
 
-1. ユーザーが `l [path]` を実行
-2. パスが存在するかチェック
-3. パスの種類（ファイル/ディレクトリ/その他）を判定
-4. 適切なハンドラで処理:
-   - ディレクトリ → `ls -la --color=auto`
-   - JSONファイル → `jq` + 必要に応じて `less`
-   - 通常ファイル → ファイル長に応じて `cat` または `less`
+The project uses a handler-based architecture where each handler:
+1. Implements `can_handle()` to determine if it can process a given path
+2. Implements `handle()` to actually process the path
+3. Can specify a priority to determine the order in which handlers are evaluated
 
-## 機能の実装状況と拡張方法
+Current handlers include:
+- `DirectoryHandler`: For directories (highest priority)
+- `JsonHandler`: For JSON files
+- `ArchiveHandler`: For archive files (ZIP, TAR, etc.)
+- `BinaryHandler`: For binary files
+- `DefaultFileHandler`: For regular text files (lowest priority)
 
-### 現在実装されている機能
+### Execution Flow
 
-- ディレクトリ表示 (`ls -la --color=auto`)
-- ファイル表示（ファイル長に応じて `cat` または `less`）
-- JSONファイルの検出と整形表示
-  - 拡張子ベースの検出 (`.json`)
-  - コンテンツベースの検出 (文字列の先頭が `{` または `[`)
-  - `jq` で整形
-  - 構文チェックと大きなファイルのフォールバック処理
+1. User executes `l [path]`
+2. Check if path exists
+3. Iterate through handlers in priority order
+4. First handler that returns `True` for `can_handle(path)` processes the path
+5. If no handler can handle the path, display an error message
 
-### 拡張の実装方法
+## Implementation Status and Extension Methods
 
-#### 新しいファイルタイプハンドラの追加
+### Currently Implemented Features
 
-新しいファイルタイプ（例：YAML、Markdown）のサポートを追加する場合は、以下の手順に従います：
+- Directory display (`ls -la --color=auto`)
+- File display (using `cat` or `less` based on file length)
+- JSON file detection and formatting
+  - Extension-based detection (`.json`)
+  - Content-based detection (string starting with `{` or `[`)
+  - Formatting with `jq`
+  - Syntax checking and fallback for large files
+- Archive file handling
+  - ZIP files (including .jar, .war, .ear, .apk, .ipa)
+  - TAR archives (including .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz, .tar.zst)
+- Binary file handling
+  - Detection using `file` command or content analysis
+  - Display using `hexdump -C`
 
-1. `should_try_<handler>` 関数を追加：
+### How to Add a New Handler
+
+To add support for a new file type (e.g., YAML, Markdown), follow these steps:
+
+1. Create a new handler class that inherits from `FileHandler`:
    ```python
-   def should_try_yaml(file_path: Path) -> bool:
-       """YAMLファイルかどうかを判定する。"""
-       if file_path.suffix.lower() in [".yml", ".yaml"]:
-           return True
+   from l_command.handlers.base import FileHandler
 
-       # コンテンツベースの検出（必要に応じて）
-       try:
-           with file_path.open("rb") as f:
-               content_start = f.read(Constants.CONTENT_CHECK_BYTES)
-               # YAMLの検出ロジック
-       except OSError:
-           pass
+   class YamlHandler(FileHandler):
+       """Handler for YAML files."""
 
-       return False
+       @classmethod
+       def can_handle(cls, path: Path) -> bool:
+           """Determine if this handler can process the path."""
+           if not path.is_file():
+               return False
+
+           # Extension-based detection
+           if path.suffix.lower() in [".yml", ".yaml"]:
+               return True
+
+           # Content-based detection (optional)
+           try:
+               with path.open("rb") as f:
+                   content_start = f.read(1024)
+                   # YAML detection logic
+           except OSError:
+               pass
+
+           return False
+
+       @classmethod
+       def handle(cls, path: Path) -> None:
+           """Process the YAML file."""
+           # Size check
+           # Tool existence check
+           # Display processing
+
+       @classmethod
+       def priority(cls) -> int:
+           """Return the priority of this handler."""
+           return 70  # Between JSON (50) and Archive (80)
    ```
 
-2. 表示ハンドラを実装：
+2. Register the handler in `handlers/__init__.py`:
    ```python
-   def display_yaml_with_yq(file_path: Path) -> None:
-       """YAMLファイルを整形表示する。"""
-       # サイズチェック
-       # ツールの存在確認
-       # 表示処理
+   from l_command.handlers.yaml import YamlHandler
+
+   def get_handlers() -> list[type[FileHandler]]:
+       """Return all available handlers in priority order."""
+       handlers: list[type[FileHandler]] = [
+           DirectoryHandler,
+           JsonHandler,
+           YamlHandler,  # Add the new handler here
+           ArchiveHandler,
+           BinaryHandler,
+           DefaultFileHandler,
+       ]
+       return sorted(handlers, key=lambda h: h.priority(), reverse=True)
    ```
 
-3. `main()` 関数のディスパッチロジックを更新：
-   ```python
-   if path.is_file():
-       if should_try_jq(path):
-           display_json_with_jq(path)
-       elif should_try_yaml(path):
-           display_yaml_with_yq(path)
-       else:
-           display_file_default(path)
-   ```
+## Testing Strategy
 
-## テスト戦略
+### Types of Tests
 
-### テストの種類
+1. **Unit Tests**: Test individual functions
+   - Handler detection methods
+   - Utility functions
 
-1. **ユニットテスト**: 個々の関数の機能をテスト
-   - `should_try_jq` のような判定関数
-   - ユーティリティ関数
+2. **Integration Tests**: Test overall command behavior
+   - Behavior of `main()` with various inputs
+   - Accuracy of subprocess calls
 
-2. **統合テスト**: コマンド全体の動作をテスト
-   - 様々な入力に対する `main()` の動作
-   - サブプロセス呼び出しの正確性
+3. **Mock Tests**: Test with mocked external dependencies
+   - Mock `subprocess` module
+   - Mock filesystem operations
 
-3. **モックテスト**: 外部依存（コマンド実行など）をモックしてテスト
-   - `subprocess` モジュールのモック
-   - ファイルシステム操作のモック
+### Test Examples
 
-### テスト例
-
-JSONファイル検出のテスト例：
+JSON file detection test example:
 
 ```python
-def test_should_try_jq_with_json_extension():
-    # .json拡張子を持つファイルを検出するかテスト
+def test_json_handler_can_handle_with_json_extension():
+    # Test detection of files with .json extension
     temp_file = Path("test.json")
-    assert should_try_jq(temp_file) == True
+    assert JsonHandler.can_handle(temp_file) == True
 
-def test_should_try_jq_with_json_content():
-    # JSONコンテンツを持つ拡張子なしファイルを検出するかテスト
+def test_json_handler_can_handle_with_json_content():
+    # Test detection of files with JSON content but no .json extension
     temp_file = Path("test_no_ext")
-    # テスト用のファイルを作成してJSONコンテンツを書き込む
+    # Create test file with JSON content
     with temp_file.open("w") as f:
         f.write('{"key": "value"}')
     try:
-        assert should_try_jq(temp_file) == True
+        assert JsonHandler.can_handle(temp_file) == True
     finally:
-        # テスト後にファイルを削除
+        # Clean up test file
         temp_file.unlink()
 ```
 
-subprocess呼び出しのテスト例：
+Subprocess call test example:
 
 ```python
 @patch("subprocess.run")
-def test_display_file_default_short_file(mock_run):
-    # ファイルが端末の高さより短い場合、catを使用することをテスト
-    # テスト用のファイルとモックを設定
-    # display_file_default呼び出し
-    # subprocess.runがcatで呼ばれたことを検証
+def test_default_file_handler_short_file(mock_run):
+    # Test that cat is used for files shorter than terminal height
+    # Set up test file and mock
+    # Call DefaultFileHandler.handle()
+    # Verify subprocess.run was called with cat
     mock_run.assert_called_once_with(["cat", ANY], check=True)
 ```
 
-## ベストプラクティス
+## Best Practices
 
-### コード設計
+### Code Design
 
-1. **単一責任の原則**: 各関数は一つの責任を持つ
-   - 例: `should_try_jq` はJSONファイル判定のみを行う
+1. **Single Responsibility Principle**: Each function has one responsibility
+   - Example: `JsonHandler.can_handle()` only determines if a file is JSON
 
-2. **優雅な失敗**: エラーハンドリングを適切に実装
-   - ツールが存在しない場合のフォールバック
-   - ファイルアクセスエラーのハンドリング
+2. **Graceful Failure**: Implement appropriate error handling
+   - Fallback when tools don't exist
+   - Handle file access errors
 
-3. **設定の集中管理**: 定数は `constants.py` に集約
+3. **Centralized Configuration**: Constants are centralized in `constants.py`
 
-### 実装のヒント
+### Implementation Tips
 
-1. **新機能の追加**:
-   - まず動作仕様をドキュメント化
-   - テストケースを先に作成（TDD）
-   - 実装後に既存のテストが壊れていないことを確認
+1. **Adding New Features**:
+   - Document the behavior specification first
+   - Create test cases first (TDD)
+   - Verify existing tests still pass after implementation
 
-2. **コマンド実行の最適化**:
-   - 不要なプロセス生成を避ける
-   - 大きなファイルの処理には注意（メモリ使用量）
-   - ユーザー体験を優先（処理速度、視覚的一貫性）
+2. **Command Execution Optimization**:
+   - Avoid unnecessary process creation
+   - Be careful with large file processing (memory usage)
+   - Prioritize user experience (processing speed, visual consistency)
 
-## よくある質問
+## Frequently Asked Questions
 
-### Q: 新しいファイルタイプのサポートはどのように追加すればよいですか？
+### Q: How do I add support for a new file type?
 
-A: 「拡張の実装方法」セクションを参照してください。基本的には、
-1. 検出関数（`should_try_X`）
-2. 表示関数（`display_X`）
-3. メイン関数での分岐処理
-の3つを実装します。
+A: See the "How to Add a New Handler" section. Basically, you need to:
+1. Create a new handler class that inherits from `FileHandler`
+2. Implement `can_handle()`, `handle()`, and `priority()` methods
+3. Register the handler in `handlers/__init__.py`
 
-### Q: テストを実行するには？
+### Q: How do I run tests?
 
-A: 以下のコマンドでテストを実行できます。
+A: Run tests with the following command:
 ```bash
 uv run pytest tests/
 ```
 
-特定のテストだけを実行する場合：
+To run a specific test:
 ```bash
-uv run pytest tests/test_json_detection.py::test_should_try_jq
+uv run pytest tests/test_json_detection.py::test_json_handler_can_handle
 ```
 
-### Q: 大きなファイルを効率的に処理する方法は？
+### Q: How can I efficiently process large files?
 
-A: 以下の戦略を検討してください：
-- ストリーム処理（ファイル全体をメモリに読み込まない）
-- サンプリング（大きなJSONの最初の部分のみ表示）
-- 適切なページング（`less`など）
-- 適切なタイムアウト処理
+A: Consider these strategies:
+- Stream processing (don't load the entire file into memory)
+- Sampling (only display the first part of large files)
+- Appropriate paging (`less`)
+- Appropriate timeout handling

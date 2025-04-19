@@ -18,9 +18,7 @@ def main() -> int:
         0 for success, 1 for error.
     """
     parser = argparse.ArgumentParser(description="Simple file and directory viewer")
-    parser.add_argument(
-        "path", nargs="?", default=".", help="Path to file or directory to display"
-    )
+    parser.add_argument("path", nargs="?", default=".", help="Path to file or directory to display")
     args = parser.parse_args()
 
     path = Path(args.path)
