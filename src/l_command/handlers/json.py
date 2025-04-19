@@ -102,7 +102,7 @@ class JsonHandler(FileHandler):
                 return
             except subprocess.CalledProcessError:
                 print(
-                    "File identified as JSON but failed validation or is invalid. " "Falling back to default viewer.",
+                    "File identified as JSON but failed validation or is invalid. Falling back to default viewer.",
                     file=sys.stderr,
                 )
                 from l_command.handlers.default import DefaultFileHandler
