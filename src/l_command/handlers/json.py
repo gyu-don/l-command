@@ -2,17 +2,20 @@
 Handler for processing JSON files.
 """
 
+import logging
 import os
 import subprocess
-import sys
 from pathlib import Path
 
-from l_command.constants import (
-    JSON_CONTENT_CHECK_BYTES,
-    MAX_JSON_SIZE_BYTES,
-)
 from l_command.handlers.base import FileHandler
 from l_command.utils import count_lines
+
+# Constants specific to JSON handling
+JSON_CONTENT_CHECK_BYTES = 1024
+MAX_JSON_SIZE_BYTES = 10 * 1024 * 1024  # 10MB limit for jq processing
+MEDIUM_JSON_LINES_THRESHOLD = 100  # Lines threshold for using less with JSON files
+
+logger = logging.getLogger(__name__)
 
 
 class JsonHandler(FileHandler):
@@ -72,11 +75,10 @@ class JsonHandler(FileHandler):
                 return
 
             if file_size > MAX_JSON_SIZE_BYTES:
-                print(
+                logger.warning(
                     f"File size ({file_size} bytes) exceeds limit "
                     f"({MAX_JSON_SIZE_BYTES} bytes). "
                     f"Falling back to default viewer.",
-                    file=sys.stderr,
                 )
                 from l_command.handlers.default import DefaultFileHandler
 
@@ -92,25 +94,23 @@ class JsonHandler(FileHandler):
                     stderr=subprocess.DEVNULL,
                 )
             except FileNotFoundError:
-                print(
+                logger.warning(
                     "jq command not found. Falling back to default viewer.",
-                    file=sys.stderr,
                 )
                 from l_command.handlers.default import DefaultFileHandler
 
                 DefaultFileHandler.handle(path)
                 return
             except subprocess.CalledProcessError:
-                print(
+                logger.warning(
                     "File identified as JSON but failed validation or is invalid. Falling back to default viewer.",
-                    file=sys.stderr,
                 )
                 from l_command.handlers.default import DefaultFileHandler
 
                 DefaultFileHandler.handle(path)
                 return
             except OSError as e:
-                print(f"Error running jq empty: {e}", file=sys.stderr)
+                logger.error(f"Error running jq: {e}")
                 from l_command.handlers.default import DefaultFileHandler
 
                 DefaultFileHandler.handle(path)
@@ -144,9 +144,8 @@ class JsonHandler(FileHandler):
                     # Check if jq process failed
                     jq_retcode = jq_process.wait()
                     if jq_retcode != 0:
-                        print(
+                        logger.error(
                             f"jq process exited with code {jq_retcode}",
-                            file=sys.stderr,
                         )
                         from l_command.handlers.default import DefaultFileHandler
 
@@ -155,21 +154,20 @@ class JsonHandler(FileHandler):
                     # For small JSON files, display directly
                     subprocess.run(["jq", ".", str(path)], check=True)
             except subprocess.CalledProcessError as e:
-                print(f"Error displaying JSON with jq: {e}", file=sys.stderr)
+                logger.error(f"Error displaying JSON with jq: {e}")
                 # Fallback even if formatting fails after validation
                 from l_command.handlers.default import DefaultFileHandler
 
                 DefaultFileHandler.handle(path)
             except OSError as e:
-                print(f"Error running jq command: {e}", file=sys.stderr)
+                logger.error(f"Error running jq command: {e}")
                 from l_command.handlers.default import DefaultFileHandler
 
                 DefaultFileHandler.handle(path)
 
         except OSError as e:
-            print(
+            logger.error(
                 f"Error accessing file stats for JSON processing: {e}",
-                file=sys.stderr,
             )
             # Fallback if we can't even get the file size
             from l_command.handlers.default import DefaultFileHandler
