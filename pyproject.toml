@@ -21,7 +21,9 @@ classifiers = [
     "Topic :: System :: Filesystems",
     "Topic :: Utilities",
 ]
-dependencies = []
+dependencies = [
+    "charset-normalizer>=3.4.1",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/gyu-don/l-command"

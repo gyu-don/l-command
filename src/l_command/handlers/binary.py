@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import charset_normalizer
+
 from l_command.handlers.base import FileHandler
 
 # Limit the size of binary files we attempt to process to avoid performance issues
@@ -21,24 +23,47 @@ class BinaryHandler(FileHandler):
     def _is_binary_content(file_path: Path) -> bool:
         """
         Fallback check if file command is not available or fails.
-        Tries to detect binary content by checking for null bytes
-        or a high proportion of non-printable characters in the first 1KB.
+        Uses charset-normalizer to detect if the content is likely text.
         """
+        # Read a sample (charset-normalizer prefers larger samples if possible)
+        # Let's keep 8KB as a reasonable compromise
+        sample_size = 8192
         try:
             with file_path.open("rb") as f:
-                sample = f.read(1024)
-            # Simple check for null byte
-            if b"\\x00" in sample:
-                return True
-            # Check for non-printable characters (excluding common whitespace)
-            text_chars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x7F)))
-            non_text_ratio = sum(1 for byte in sample if byte not in text_chars) / len(sample)
-            # Arbitrary threshold, might need tuning
-            return non_text_ratio > 0.3
+                sample = f.read(sample_size)
         except OSError:
+            # If we can't read, assume not binary for safety?
+            # Or maybe True? Let's stick with False for now.
             return False
-        except ZeroDivisionError:  # Handle empty file case
+
+        if not sample:
+            # Empty file is considered text
             return False
+
+        # Use charset-normalizer to detect encoding
+        # is_binary=True if no valid encoding is detected or confidence is very low
+        # Note: charset-normalizer might still identify some binary formats
+        #       if they contain significant text-like patterns.
+        #       This focuses on identifying files *primarily* intended as text.
+        results = charset_normalizer.from_bytes(sample)
+        best_match = results.best()
+
+        # If no suitable encoding is found, consider it binary.
+        if best_match is None:
+            return True
+
+        # Consider common text encodings as non-binary
+        # We could be more strict here if needed.
+        likely_text_encodings = {
+            "ascii",
+            "utf_8",
+            "iso8859_1",  # Often used, includes Latin-1
+            "cp1252",  # Windows Latin-1
+            # Add other common text encodings if necessary
+        }
+
+        # If the detected encoding is a common text one, treat as text (False)
+        return best_match.encoding.lower() not in likely_text_encodings
 
     @staticmethod
     def can_handle(path: Path) -> bool:
