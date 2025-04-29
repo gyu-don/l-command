@@ -2,18 +2,19 @@
 Handler for processing binary files.
 """
 
+import logging
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-import charset_normalizer
-
 from l_command.handlers.base import FileHandler
 
 # Limit the size of binary files we attempt to process to avoid performance issues
 MAX_BINARY_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+
+logger = logging.getLogger(__name__)
 
 
 class BinaryHandler(FileHandler):
@@ -23,9 +24,8 @@ class BinaryHandler(FileHandler):
     def _is_binary_content(file_path: Path) -> bool:
         """
         Fallback check if file command is not available or fails.
-        Uses charset-normalizer to detect if the content is likely text.
         """
-        # Read a sample (charset-normalizer prefers larger samples if possible)
+        # Read a sample
         # Let's keep 8KB as a reasonable compromise
         sample_size = 8192
         try:
@@ -40,30 +40,8 @@ class BinaryHandler(FileHandler):
             # Empty file is considered text
             return False
 
-        # Use charset-normalizer to detect encoding
-        # is_binary=True if no valid encoding is detected or confidence is very low
-        # Note: charset-normalizer might still identify some binary formats
-        #       if they contain significant text-like patterns.
-        #       This focuses on identifying files *primarily* intended as text.
-        results = charset_normalizer.from_bytes(sample)
-        best_match = results.best()
-
-        # If no suitable encoding is found, consider it binary.
-        if best_match is None:
-            return True
-
-        # Consider common text encodings as non-binary
-        # We could be more strict here if needed.
-        likely_text_encodings = {
-            "ascii",
-            "utf_8",
-            "iso8859_1",  # Often used, includes Latin-1
-            "cp1252",  # Windows Latin-1
-            # Add other common text encodings if necessary
-        }
-
-        # If the detected encoding is a common text one, treat as text (False)
-        return best_match.encoding.lower() not in likely_text_encodings
+        # Simplified check: only check for null bytes
+        return b"\x00" in sample
 
     @staticmethod
     def can_handle(path: Path) -> bool:
@@ -94,25 +72,28 @@ class BinaryHandler(FileHandler):
                 encoding = result.stdout.strip()
                 # Treat 'binary' or 'unknown-*' as binary
                 if encoding == "binary" or encoding.startswith("unknown-"):
+                    logger.debug(f"'file' command identified {path} as '{encoding}'.")
                     return True
-                # Sometimes 'us-ascii' or 'utf-8' might be reported for binaries
-                # containing mostly text-like data, so fall through to content check.
+                # Trust 'file' command for common text encodings
                 if encoding in ["us-ascii", "utf-8", "iso-8859-1"]:
-                    # Use content check as a secondary measure for potentially text-like binaries
-                    return BinaryHandler._is_binary_content(path)
-                # If file reports a specific non-text encoding, treat as binary
-                return encoding not in ["us-ascii", "utf-8", "iso-8859-1"]
-
-            except subprocess.CalledProcessError:
-                # file command failed, fallback to content check
-                return BinaryHandler._is_binary_content(path)
-            except subprocess.TimeoutExpired:
-                # file command timed out, fallback to content check
-                print(f"Warning: 'file' command timed out for {path}", file=sys.stderr)
-                return BinaryHandler._is_binary_content(path)
-            except Exception as e:
-                print(f"Warning: 'file' command check failed for {path}: {e}", file=sys.stderr)
-                # Fallback if 'file' command has other issues
+                    logger.debug(
+                        f"'file' command identified {path} as '{encoding}', performing secondary content check."
+                    )
+                    try:
+                        return BinaryHandler._is_binary_content(path)
+                    except Exception as e:
+                        # Log the error during the fallback check
+                        logger.warning(f"Fallback content check failed for {path}: {e!s}")
+                        # If fallback fails, cautiously assume it's not binary?
+                        return False
+                # If 'file' reported something else, it might be text or binary.
+                # Let's cautiously treat it as non-binary for now, but log it.
+                # Alternatively, we could fall back to _is_binary_content here too.
+                logger.debug(f"'file' command reported '{encoding}' for {path}, treating as non-binary.")
+                return False
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, UnicodeDecodeError) as e:
+                logger.warning(f"'file' command check failed for {path}: {e!s}, falling back to content check.")
+                # Fallback to content check if 'file' command fails
                 return BinaryHandler._is_binary_content(path)
         else:
             # Fallback to content check if 'file' command is not available
