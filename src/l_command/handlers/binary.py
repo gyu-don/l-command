@@ -6,7 +6,6 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 from l_command.handlers.base import FileHandler
@@ -103,10 +102,7 @@ class BinaryHandler(FileHandler):
     def handle(path: Path) -> None:
         """Display the contents of a binary file using hexdump."""
         if not shutil.which("hexdump"):
-            print(
-                "Error: 'hexdump' command not found. Cannot display binary file.",
-                file=sys.stderr,
-            )
+            logger.error("Error: 'hexdump' command not found. Cannot display binary file.")
             # Consider adding a fallback to 'strings' or basic message here later?
             return
 
@@ -132,7 +128,7 @@ class BinaryHandler(FileHandler):
             except Exception as e:
                 # Handle potential decoding errors if output isn't standard text,
                 # although hexdump should be fine
-                print(f"Warning: Error reading hexdump output: {e}", file=sys.stderr)
+                logger.warning(f"Error reading hexdump output: {e}")
             finally:
                 process.stdout.close()  # type: ignore
                 process.wait()  # Wait for the process to finish
@@ -140,34 +136,69 @@ class BinaryHandler(FileHandler):
             # Second subprocess call to display content
             if line_count > terminal_height and shutil.which("less"):
                 hexdump_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                less_process = None  # Initialize less_process
                 try:
-                    subprocess.run(["less", "-R"], stdin=hexdump_process.stdout, check=True)
-                except subprocess.CalledProcessError as less_err:
-                    # less might exit with non-zero if user quits with 'q' before EOF.
-                    # This is not an error for us. Typically, quitting less results in retcode 0 or
-                    # sometimes 130 (SIGINT) if Ctrl+C is used. If stderr is empty, assume it was a normal quit.
-                    if less_err.stderr:
-                        print(f"Error running less: {less_err.stderr.decode(errors='ignore')}", file=sys.stderr)
-
-                hexdump_process.stdout.close()  # type: ignore
-                hexdump_retcode = hexdump_process.wait()
-                # Check if hexdump itself had an error
-                if hexdump_retcode != 0:
-                    error_output = hexdump_process.stderr.read().decode(errors="ignore")  # type: ignore
-                    print(
-                        f"hexdump process exited with code {hexdump_retcode}. Error: {error_output}",
-                        file=sys.stderr,
+                    less_process = subprocess.Popen(
+                        ["less", "-R"],
+                        stdin=hexdump_process.stdout,  # Let less handle stdout directly
                     )
+                    # Close hexdump's stdout to signal EOF to less
+                    hexdump_process.stdout.close()
+                    # Wait for less to finish *after* hexdump stdout is closed
+                    less_process.wait()  # Wait for less to exit naturally
+                except BrokenPipeError:  # less exited early (e.g., user pressed 'q')
+                    pass  # Not an error
+                finally:
+                    # Ensure hexdump process is terminated if still running
+                    if hexdump_process.poll() is None:  # Check if process is still running
+                        hexdump_process.terminate()
+                        hexdump_process.wait()  # Wait for termination
+
+                # Check less exit status *after* the try block
+                if less_process and less_process.poll() is not None:  # Check if less started and finished
+                    less_exit_code = less_process.returncode
+                    if less_exit_code != 0:
+                        # Try to capture stderr if less errored, might be None
+                        try:
+                            _, less_stderr_bytes = less_process.communicate(timeout=0.1)
+                            less_stderr_msg = less_stderr_bytes.decode(errors="ignore")
+                            logger.error(f"less exited with code {less_exit_code}: {less_stderr_msg}")
+                        except subprocess.TimeoutExpired:
+                            logger.error(f"less exited with code {less_exit_code} (stderr not captured)")
+                        except Exception as e_comm:
+                            logger.error(f"less exited with code {less_exit_code}, error capturing stderr: {e_comm}")
             else:
                 # Output directly if it fits or less is not available
-                subprocess.run(command, check=True)
+                # Using Popen/communicate to avoid loading large files entirely into memory
+                try:
+                    direct_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    stdout_bytes, stderr_bytes = direct_process.communicate()
+                    if direct_process.returncode == 0:
+                        print(stdout_bytes.decode(errors="ignore"), end="")
+                    else:
+                        stderr_msg = stderr_bytes.decode(errors="ignore")
+                        logger.error(f"hexdump exited with code {direct_process.returncode}: {stderr_msg}")
+                except FileNotFoundError:
+                    logger.error(f"Required command '{command[0]}' not found.")
+                except Exception as e:
+                    logger.exception(f"An unexpected error occurred running hexdump: {e}")
 
+        except FileNotFoundError as e:
+            if "hexdump" in str(e) or "less" in str(e):
+                logger.error(f"Required command '{e.filename}' not found.")
+            else:
+                logger.error(f"Error accessing binary file: {e}")
         except subprocess.CalledProcessError as e:
-            print(f"Error running hexdump: {e}", file=sys.stderr)
+            # Log errors from the hexdump command itself (should be rare with pipe)
+            logger.error(f"Error running hexdump command: {e}")
+            if e.stderr:
+                logger.error(f"Hexdump stderr: {e.stderr.decode(errors='ignore')}")
         except OSError as e:
-            print(f"Error accessing binary file or running subprocess: {e}", file=sys.stderr)
-        except Exception as e:  # Catch unexpected errors
-            print(f"An unexpected error occurred: {e}", file=sys.stderr)
+            # General OS errors (permissions, etc.)
+            logger.error(f"OS error processing binary file: {e}")
+        except Exception as e:
+            # Catchall for any other unexpected issues
+            logger.exception(f"An unexpected error occurred processing {path}: {e}")
 
     @staticmethod
     def priority() -> int:
