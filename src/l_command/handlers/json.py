@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from l_command.handlers.base import FileHandler
-from l_command.utils import smart_pager
+from l_command.utils import count_lines, smart_pager
 
 # Constants specific to JSON handling
 JSON_CONTENT_CHECK_BYTES = 1024

@@ -32,17 +32,33 @@ def test_can_handle_invalid() -> None:
 def test_handle_zip(mocker: "MockerFixture") -> None:
     path = Path("test.zip")
     mocker.patch("shutil.which", return_value="/usr/bin/unzip")
-    mock_run = mocker.patch("l_command.handlers.archive.subprocess.run")
+    mock_popen = mocker.patch("l_command.handlers.archive.subprocess.Popen")
+    mock_pager = mocker.patch("l_command.handlers.archive.smart_pager")
+    
     ArchiveHandler.handle(path)
-    mock_run.assert_called_with(["unzip", "-l", str(path)], check=True)
+    
+    mock_popen.assert_called_with(
+        ["unzip", "-l", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    mock_pager.assert_called_once()
 
 
 def test_handle_tar(mocker: "MockerFixture") -> None:
     path = Path("test.tar")
     mocker.patch("shutil.which", return_value="/usr/bin/tar")
-    mock_run = mocker.patch("l_command.handlers.archive.subprocess.run")
+    mock_popen = mocker.patch("l_command.handlers.archive.subprocess.Popen")
+    mock_pager = mocker.patch("l_command.handlers.archive.smart_pager")
+    
     ArchiveHandler.handle(path)
-    mock_run.assert_called_with(["tar", "-tvf", str(path)], check=True)
+    
+    mock_popen.assert_called_with(
+        ["tar", "-tvf", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    mock_pager.assert_called_once()
 
 
 def test_can_handle_jar() -> None:
@@ -50,58 +66,75 @@ def test_can_handle_jar() -> None:
     assert ArchiveHandler.can_handle(path) is True
 
 
-def test_can_handle_tar_zst() -> None:
+def test_can_handle_tar_zst(mocker: "MockerFixture") -> None:
     path = Path("test.tar.zst")
+    mocker.patch("shutil.which", side_effect=lambda cmd: "/usr/bin/" + cmd if cmd in ["tar", "unzstd"] else None)
     assert ArchiveHandler.can_handle(path) is True
 
 
 def test_handle_jar(mocker: "MockerFixture") -> None:
     path = Path("test.jar")
     mocker.patch("shutil.which", return_value="/usr/bin/unzip")
-    mocker.patch("l_command.handlers.archive.subprocess.run")
+    mock_popen = mocker.patch("l_command.handlers.archive.subprocess.Popen")
+    mock_pager = mocker.patch("l_command.handlers.archive.smart_pager")
+    
     ArchiveHandler.handle(path)
-    subprocess.run.assert_called_with(["unzip", "-l", str(path)], check=True)
+    
+    mock_popen.assert_called_with(
+        ["unzip", "-l", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    mock_pager.assert_called_once()
 
 
 def test_handle_tar_zst(mocker: "MockerFixture") -> None:
     path = Path("test.tar.zst")
     mocker.patch("shutil.which", side_effect=["/usr/bin/tar", "/usr/bin/unzstd"])
-    mocker.patch("l_command.handlers.archive.subprocess.run")
+    mock_popen = mocker.patch("l_command.handlers.archive.subprocess.Popen")
+    mock_pager = mocker.patch("l_command.handlers.archive.smart_pager")
+    
     ArchiveHandler.handle(path)
-    subprocess.run.assert_called_with(["tar", "--use-compress-program=unzstd", "-tvf", str(path)], check=True)
+    
+    mock_popen.assert_called_with(
+        ["tar", "--use-compress-program=unzstd", "-tvf", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    mock_pager.assert_called_once()
 
 
 def test_handle_zip_with_less(mocker: "MockerFixture") -> None:
     path = Path("test.zip")
     mocker.patch("shutil.which", return_value="/usr/bin/unzip")
-    mocker.patch("os.get_terminal_size", return_value=os.terminal_size((80, 24)))
-    mock_run = mocker.patch("l_command.handlers.archive.subprocess.run")
-
+    
+    # Create a mock process
     mock_process = mocker.Mock()
-    mock_stdout = mocker.Mock()
-    mock_stdout.__iter__ = lambda self: iter([b"line\n"] * 50)  # Simulate 50 lines of output
-    mock_process.stdout = mock_stdout
-    mock_process.communicate.return_value = (b"line\n" * 50, None)
+    mock_process.stdout = mocker.Mock()
     mocker.patch("l_command.handlers.archive.subprocess.Popen", return_value=mock_process)
-
+    
+    # Mock the smart_pager function
+    mock_pager = mocker.patch("l_command.handlers.archive.smart_pager")
+    
     ArchiveHandler.handle(path)
-
-    mock_run.assert_called_with(["less", "-R"], stdin=mock_stdout, check=True)
+    
+    # Verify smart_pager was called with the process and less command
+    mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
 
 def test_handle_tar_with_less(mocker: "MockerFixture") -> None:
     path = Path("test.tar")
-    mocker.patch("shutil.which", side_effect=["/usr/bin/tar", "/usr/bin.unzstd"])
-    mocker.patch("os.get_terminal_size", return_value=os.terminal_size((80, 24)))
-    mock_run = mocker.patch("l_command.handlers.archive.subprocess.run")
-
+    mocker.patch("shutil.which", side_effect=["/usr/bin/tar", "/usr/bin/unzstd"])
+    
+    # Create a mock process
     mock_process = mocker.Mock()
-    mock_stdout = mocker.Mock()
-    mock_stdout.__iter__ = lambda self: iter([b"line\n"] * 50)  # Simulate 50 lines of output
-    mock_process.stdout = mock_stdout
-    mock_process.communicate.return_value = (b"line\n" * 50, None)
+    mock_process.stdout = mocker.Mock()
     mocker.patch("l_command.handlers.archive.subprocess.Popen", return_value=mock_process)
-
+    
+    # Mock the smart_pager function
+    mock_pager = mocker.patch("l_command.handlers.archive.smart_pager")
+    
     ArchiveHandler.handle(path)
-
-    mock_run.assert_called_with(["less", "-R"], stdin=mock_stdout, check=True)
+    
+    # Verify smart_pager was called with the process and less command
+    mock_pager.assert_called_with(mock_process, ["less", "-R"])

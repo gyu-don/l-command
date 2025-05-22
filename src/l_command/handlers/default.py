@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from l_command.handlers.base import FileHandler
-from l_command.utils import smart_pager
+from l_command.utils import count_lines, smart_pager
 
 logger = logging.getLogger(__name__)
 
