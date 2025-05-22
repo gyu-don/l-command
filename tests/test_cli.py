@@ -168,165 +168,99 @@ def test_main_with_directory_large(tmp_path: Path, monkeypatch: MonkeyPatch, moc
 
 
 def test_directory_handler_small_directory(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """Test DirectoryHandler with a small directory (direct output)."""
+    """Test DirectoryHandler with a small directory."""
     from l_command.handlers.directory import DirectoryHandler
 
     # Create a test directory
     test_dir = tmp_path / "small_dir"
     test_dir.mkdir()
 
-    # Mock subprocess.run and subprocess.Popen
-    with (
-        patch("subprocess.run") as mock_run,
-        patch("subprocess.Popen") as mock_popen,
-        patch("os.get_terminal_size") as mock_terminal_size,
-    ):
-        # Configure mock_popen to return a process with few lines
+    # Mock subprocess.Popen and smart_pager
+    with patch("subprocess.Popen") as mock_popen:
+        # Configure Popen to return a process
         mock_process = MagicMock()
         mock_process.stdout = MagicMock()
-        mock_process.stdout.readlines.return_value = ["line"] * 10  # 10 lines
         mock_popen.return_value = mock_process
 
-        # Configure terminal size to be larger than output
-        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+        # Mock smart_pager
+        with patch("l_command.handlers.directory.smart_pager") as mock_pager:
+            # Call the handler
+            DirectoryHandler.handle(test_dir)
 
-        # Call the handler
-        DirectoryHandler.handle(test_dir)
+            # Verify subprocess.Popen was called with correct arguments
+            mock_popen.assert_called_with(
+                ["ls", "-la", "--color=always", str(test_dir)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
 
-        # Verify subprocess.Popen was called correctly for counting lines
-        mock_popen.assert_called_with(
-            ["ls", "-la", "--color=always", str(test_dir)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
-        # Verify subprocess.run was called with correct arguments for small directory
-        mock_run.assert_called_with(
-            ["ls", "-la", "--color=auto", str(test_dir)],
-            check=True,
-        )
+            # Verify smart_pager was called with the process
+            mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
 
 def test_directory_handler_large_directory(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """Test DirectoryHandler with a large directory (uses less)."""
+    """Test DirectoryHandler with a large directory."""
     from l_command.handlers.directory import DirectoryHandler
 
     # Create a test directory
     test_dir = tmp_path / "large_dir"
     test_dir.mkdir()
 
-    # Mock subprocess.run, subprocess.Popen, and os.get_terminal_size
-    with (
-        patch("subprocess.run") as mock_run,
-        patch("subprocess.Popen") as mock_popen,
-        patch("os.get_terminal_size") as mock_terminal_size,
-    ):
-        # First Popen call for counting lines
-        first_process = MagicMock()
-        first_process.stdout = MagicMock()
-        first_process.stdout.readlines.return_value = ["line"] * 50  # 50 lines
+    # Mock subprocess.Popen and smart_pager
+    with patch("subprocess.Popen") as mock_popen:
+        # Configure Popen to return a process
+        mock_process = MagicMock()
+        mock_process.stdout = MagicMock()
+        mock_popen.return_value = mock_process
 
-        # Second Popen call for piping to less
-        second_process = MagicMock()
-        second_process.stdout = MagicMock()
+        # Mock smart_pager
+        with patch("l_command.handlers.directory.smart_pager") as mock_pager:
+            # Call the handler
+            DirectoryHandler.handle(test_dir)
 
-        # Configure mock_popen to return different processes on consecutive calls
-        mock_popen.side_effect = [first_process, second_process]
+            # Verify subprocess.Popen was called with correct arguments
+            mock_popen.assert_called_with(
+                ["ls", "-la", "--color=always", str(test_dir)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
 
-        # Configure terminal size to be smaller than output
-        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
-
-        # Call the handler
-        DirectoryHandler.handle(test_dir)
-
-        # Verify first subprocess.Popen call for counting lines
-        assert mock_popen.call_args_list[0] == call(
-            ["ls", "-la", "--color=always", str(test_dir)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
-        # Verify second subprocess.Popen call for piping to less
-        assert mock_popen.call_args_list[1] == call(
-            ["ls", "-la", "--color=always", str(test_dir)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        # Verify subprocess.run was called with less
-        mock_run.assert_called_with(
-            ["less", "-R"],
-            stdin=second_process.stdout,
-            check=True,
-        )
-
-        # Verify stdout was closed and wait was called
-        second_process.stdout.close.assert_called_once()
-        second_process.wait.assert_called_once()
+            # Verify smart_pager was called with the process
+            mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
 
 def test_default_file_handler_small_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """Test DefaultFileHandler with a small file (uses cat)."""
+    """Test DefaultFileHandler with a small file."""
     from l_command.handlers.default import DefaultFileHandler
 
     # Create a test file
     test_file = tmp_path / "small_file.txt"
     create_file(test_file, "\n".join(["line"] * 10))  # 10 lines
 
-    # Mock subprocess.run and os.get_terminal_size
-    with (
-        patch("subprocess.run") as mock_run,
-        patch("os.get_terminal_size") as mock_terminal_size,
-    ):
-        # Configure terminal size to be larger than file
-        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+    # Mock smart_pager
+    with patch("l_command.handlers.default.smart_pager") as mock_pager:
+        # Call the handler
+        DefaultFileHandler.handle(test_file)
 
-        # Mock count_lines directly in the module where it's used
-        with patch("l_command.handlers.default.count_lines", return_value=10) as mock_count_lines:
-            # Call the handler
-            DefaultFileHandler.handle(test_file)
-
-            # Verify count_lines was called
-            mock_count_lines.assert_called_once_with(test_file)
-
-        # Verify subprocess.run was called with cat
-        mock_run.assert_called_once_with(
-            ["cat", str(test_file)],
-            check=True,
-        )
+        # Verify smart_pager was called with the file path
+        mock_pager.assert_called_once_with(test_file)
 
 
 def test_default_file_handler_large_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """Test DefaultFileHandler with a large file (uses less)."""
+    """Test DefaultFileHandler with a large file."""
     from l_command.handlers.default import DefaultFileHandler
 
     # Create a test file
     test_file = tmp_path / "large_file.txt"
     create_file(test_file, "\n".join(["line"] * 50))  # 50 lines
 
-    # Mock subprocess.run and os.get_terminal_size
-    with (
-        patch("subprocess.run") as mock_run,
-        patch("os.get_terminal_size") as mock_terminal_size,
-    ):
-        # Configure terminal size to be smaller than file
-        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
+    # Mock smart_pager
+    with patch("l_command.handlers.default.smart_pager") as mock_pager:
+        # Call the handler
+        DefaultFileHandler.handle(test_file)
 
-        # Mock count_lines directly in the module where it's used
-        with patch("l_command.handlers.default.count_lines", return_value=50) as mock_count_lines:
-            # Call the handler
-            DefaultFileHandler.handle(test_file)
-
-            # Verify count_lines was called
-            mock_count_lines.assert_called_once_with(test_file)
-
-        # Verify subprocess.run was called with less
-        mock_run.assert_called_once_with(
-            ["less", "-RFX", str(test_file)],
-            check=True,
-        )
+        # Verify smart_pager was called with the file path
+        mock_pager.assert_called_once_with(test_file)
 
 
 def test_json_handler_can_handle(tmp_path: Path) -> None:
@@ -367,40 +301,44 @@ def test_json_handler_small_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
     test_file = tmp_path / "small.json"
     create_file(test_file, '{"key": "value"}')
 
-    # Mock subprocess.run, os.get_terminal_size, and Path.stat
+    # Mock subprocess.run, subprocess.Popen, and Path.stat
     with (
         patch("subprocess.run") as mock_run,
-        patch("os.get_terminal_size") as mock_terminal_size,
+        patch("subprocess.Popen") as mock_popen,
         patch("pathlib.Path.stat") as mock_stat,
     ):
-        # Configure terminal size to be larger than file
-        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
-
         # Configure stat to return a small file size
         mock_stat_result = MagicMock()
         mock_stat_result.st_size = 100  # Small file
         mock_stat.return_value = mock_stat_result
 
-        # Mock count_lines directly in the module where it's used
-        with patch("l_command.handlers.json.count_lines", return_value=1) as mock_count_lines:
+        # Configure mock_popen to return a process
+        mock_process = MagicMock()
+        mock_process.stdout = MagicMock()
+        mock_popen.return_value = mock_process
+
+        # Mock smart_pager
+        with patch("l_command.handlers.json.smart_pager") as mock_pager:
             # Call the handler
             JsonHandler.handle(test_file)
 
-            # Verify count_lines was called
-            mock_count_lines.assert_called_once_with(test_file)
+            # Verify subprocess.run was called for validation
+            mock_run.assert_called_with(
+                ["jq", "empty", str(test_file)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
-        # Verify subprocess.run was called for validation and display
-        assert mock_run.call_count == 2
-        assert mock_run.call_args_list[0] == call(
-            ["jq", "empty", str(test_file)],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        assert mock_run.call_args_list[1] == call(
-            ["jq", ".", str(test_file)],
-            check=True,
-        )
+            # Verify subprocess.Popen was called for jq
+            mock_popen.assert_called_with(
+                ["jq", "--color-output", ".", str(test_file)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            # Verify smart_pager was called with the process
+            mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
 
 def test_json_handler_large_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -412,16 +350,12 @@ def test_json_handler_large_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
     content = '{\n"a": [' + ",\n".join([f'"{i}"' for i in range(50)]) + "]\n}"
     create_file(test_file, content)
 
-    # Mock subprocess.run, subprocess.Popen, os.get_terminal_size, and Path.stat
+    # Mock subprocess.run, subprocess.Popen, and Path.stat
     with (
         patch("subprocess.run") as mock_run,
         patch("subprocess.Popen") as mock_popen,
-        patch("os.get_terminal_size") as mock_terminal_size,
         patch("pathlib.Path.stat") as mock_stat,
     ):
-        # Configure terminal size to be smaller than file
-        mock_terminal_size.return_value = os.terminal_size((80, 24))  # 24 lines
-
         # Configure stat to return a small file size
         mock_stat_result = MagicMock()
         mock_stat_result.st_size = 1000  # Small enough to not exceed limit
@@ -432,39 +366,28 @@ def test_json_handler_large_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
         mock_process.stdout = MagicMock()
         mock_popen.return_value = mock_process
 
-        # Mock count_lines directly in the module where it's used
-        with patch("l_command.handlers.json.count_lines", return_value=52) as mock_count_lines:
+        # Mock smart_pager
+        with patch("l_command.handlers.json.smart_pager") as mock_pager:
             # Call the handler
             JsonHandler.handle(test_file)
 
-            # Verify count_lines was called
-            mock_count_lines.assert_called_once_with(test_file)
+            # Verify subprocess.run was called for validation
+            assert mock_run.call_args_list[0] == call(
+                ["jq", "empty", str(test_file)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
-        # Verify subprocess.run was called for validation
-        assert mock_run.call_args_list[0] == call(
-            ["jq", "empty", str(test_file)],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+            # Verify subprocess.Popen was called for jq
+            mock_popen.assert_called_once_with(
+                ["jq", "--color-output", ".", str(test_file)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
 
-        # Verify subprocess.Popen was called for jq
-        mock_popen.assert_called_once_with(
-            ["jq", "--color-output", ".", str(test_file)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        # Verify subprocess.run was called for less
-        assert mock_run.call_args_list[1] == call(
-            ["less", "-R"],
-            stdin=mock_process.stdout,
-            check=True,
-        )
-
-        # Verify stdout was closed and wait was called
-        mock_process.stdout.close.assert_called_once()
-        mock_process.wait.assert_called_once()
+            # Verify smart_pager was called with the process
+            mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
 
 def test_json_handler_oversized_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

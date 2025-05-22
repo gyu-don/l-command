@@ -37,7 +37,7 @@ def main() -> int:
             # Handle special path types (sockets, FIFOs, etc.)
             print(f"Path is not a file or directory: {path}", file=sys.stderr)
             # Run ls -lad to show what it is
-            subprocess.run(["ls", "-lad", str(path)])
+            subprocess.run(["ls", "-lad", str(path)], check=False)
 
     except subprocess.CalledProcessError as e:
         # Catch errors from ls command
