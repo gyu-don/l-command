@@ -55,7 +55,6 @@ def test_smart_pager_with_process() -> None:
     mock_process = MagicMock()
     mock_process.stdout = MagicMock()
 
-    with patch("sys.stdout.isatty", return_value=False), \
-         patch("shutil.copyfileobj") as mock_copyfileobj:
+    with patch("sys.stdout.isatty", return_value=False), patch("shutil.copyfileobj") as mock_copyfileobj:
         smart_pager(mock_process)
         mock_copyfileobj.assert_called_once()

@@ -181,19 +181,19 @@ def test_directory_handler_small_directory(tmp_path: Path, monkeypatch: MonkeyPa
         mock_process = MagicMock()
         mock_process.stdout = MagicMock()
         mock_popen.return_value = mock_process
-        
+
         # Mock smart_pager
         with patch("l_command.handlers.directory.smart_pager") as mock_pager:
             # Call the handler
             DirectoryHandler.handle(test_dir)
-            
+
             # Verify subprocess.Popen was called with correct arguments
             mock_popen.assert_called_with(
                 ["ls", "-la", "--color=always", str(test_dir)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            
+
             # Verify smart_pager was called with the process
             mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
@@ -212,19 +212,19 @@ def test_directory_handler_large_directory(tmp_path: Path, monkeypatch: MonkeyPa
         mock_process = MagicMock()
         mock_process.stdout = MagicMock()
         mock_popen.return_value = mock_process
-        
+
         # Mock smart_pager
         with patch("l_command.handlers.directory.smart_pager") as mock_pager:
             # Call the handler
             DirectoryHandler.handle(test_dir)
-            
+
             # Verify subprocess.Popen was called with correct arguments
             mock_popen.assert_called_with(
                 ["ls", "-la", "--color=always", str(test_dir)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            
+
             # Verify smart_pager was called with the process
             mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
@@ -316,12 +316,12 @@ def test_json_handler_small_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
         mock_process = MagicMock()
         mock_process.stdout = MagicMock()
         mock_popen.return_value = mock_process
-        
+
         # Mock smart_pager
         with patch("l_command.handlers.json.smart_pager") as mock_pager:
             # Call the handler
             JsonHandler.handle(test_file)
-            
+
             # Verify subprocess.run was called for validation
             mock_run.assert_called_with(
                 ["jq", "empty", str(test_file)],
@@ -329,14 +329,14 @@ def test_json_handler_small_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            
+
             # Verify subprocess.Popen was called for jq
             mock_popen.assert_called_with(
                 ["jq", "--color-output", ".", str(test_file)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            
+
             # Verify smart_pager was called with the process
             mock_pager.assert_called_with(mock_process, ["less", "-R"])
 
@@ -365,12 +365,12 @@ def test_json_handler_large_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
         mock_process = MagicMock()
         mock_process.stdout = MagicMock()
         mock_popen.return_value = mock_process
-        
+
         # Mock smart_pager
         with patch("l_command.handlers.json.smart_pager") as mock_pager:
             # Call the handler
             JsonHandler.handle(test_file)
-            
+
             # Verify subprocess.run was called for validation
             assert mock_run.call_args_list[0] == call(
                 ["jq", "empty", str(test_file)],
@@ -378,14 +378,14 @@ def test_json_handler_large_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            
+
             # Verify subprocess.Popen was called for jq
             mock_popen.assert_called_once_with(
                 ["jq", "--color-output", ".", str(test_file)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            
+
             # Verify smart_pager was called with the process
             mock_pager.assert_called_with(mock_process, ["less", "-R"])
 

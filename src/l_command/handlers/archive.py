@@ -55,11 +55,11 @@ class ArchiveHandler(FileHandler):
                 # Check if unzip process failed
                 unzip_retcode = unzip_process.wait()
                 if unzip_retcode != 0:
-                    logger.error(f"unzip process exited with code {unzip_retcode}")
+                    logger.error("unzip process exited with code %s", unzip_retcode)
                 return
 
             if suffix == ".tar" or name.endswith(
-                (".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst")
+                (".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst"),
             ):
                 command = ["tar", "-tvf", str(path)]
                 if name.endswith(".tar.zst"):
@@ -83,13 +83,13 @@ class ArchiveHandler(FileHandler):
                 # Check if tar process failed
                 tar_retcode = tar_process.wait()
                 if tar_retcode != 0:
-                    logger.error(f"tar process exited with code {tar_retcode}")
+                    logger.error("tar process exited with code %s", tar_retcode)
                 return
 
-        except subprocess.SubprocessError as e:
-            logger.error(f"Error displaying archive: {e}")
-        except OSError as e:
-            logger.error(f"Error accessing archive file: {e}")
+        except subprocess.SubprocessError:
+            logger.exception("Error displaying archive")
+        except OSError:
+            logger.exception("Error accessing archive file")
 
     @staticmethod
     def priority() -> int:

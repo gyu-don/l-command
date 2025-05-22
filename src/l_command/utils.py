@@ -50,7 +50,7 @@ def smart_pager(
 
     # If stdout is not a TTY, output directly without paging
     if not sys.stdout.isatty():
-        if hasattr(content, 'stdout') and hasattr(content, 'wait'):  # It's a Popen-like object
+        if hasattr(content, "stdout") and hasattr(content, "wait"):  # It's a Popen-like object
             if content.stdout:
                 shutil.copyfileobj(content.stdout, sys.stdout.buffer)
         elif isinstance(content, Path):
@@ -68,7 +68,7 @@ def smart_pager(
         terminal_height = float("inf")  # Fallback if not in a terminal
 
     # Handle different content types
-    if hasattr(content, 'stdout') and hasattr(content, 'wait'):  # It's a Popen-like object
+    if hasattr(content, "stdout") and hasattr(content, "wait"):  # It's a Popen-like object
         _handle_process_with_pager(content, terminal_height, pager_cmd)
     elif isinstance(content, Path):
         _handle_file_with_pager(content, terminal_height, pager_cmd)

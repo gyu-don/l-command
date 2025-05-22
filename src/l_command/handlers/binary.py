@@ -71,12 +71,14 @@ class BinaryHandler(FileHandler):
                 encoding = result.stdout.strip()
                 # Treat 'binary' or 'unknown-*' as binary
                 if encoding == "binary" or encoding.startswith("unknown-"):
-                    logger.debug(f"'file' command identified {path} as '{encoding}'.")
+                    logger.debug("'file' command identified %s as '%s'.", path, encoding)
                     return True
                 # Trust 'file' command for common text encodings
                 if encoding in ["us-ascii", "utf-8", "iso-8859-1"]:
                     logger.debug(
-                        f"'file' command identified {path} as '{encoding}', performing secondary content check."
+                        "'file' command identified %s as '%s', performing secondary content check.",
+                        path,
+                        encoding,
                     )
                     try:
                         return BinaryHandler._is_binary_content(path)
