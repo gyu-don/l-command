@@ -45,14 +45,16 @@ def test_can_handle_with_file_command(tmp_path: Path) -> None:
     create_binary_file(binary_file, b"\x00\x01\x02")
 
     # Mock the file command to return "binary"
-    with patch("shutil.which", lambda cmd: True if cmd == "file" else None), patch(
-        "subprocess.run", return_value=MagicMock(stdout="binary\n", returncode=0)
+    with (
+        patch("shutil.which", lambda cmd: True if cmd == "file" else None),
+        patch("subprocess.run", return_value=MagicMock(stdout="binary\n", returncode=0)),
     ):
         assert BinaryHandler.can_handle(binary_file) is True
 
     # Mock the file command to return "us-ascii" but content is binary
-    with patch("shutil.which", lambda cmd: True if cmd == "file" else None), patch(
-        "subprocess.run", return_value=MagicMock(stdout="us-ascii\n", returncode=0)
+    with (
+        patch("shutil.which", lambda cmd: True if cmd == "file" else None),
+        patch("subprocess.run", return_value=MagicMock(stdout="us-ascii\n", returncode=0)),
     ):
         assert BinaryHandler.can_handle(binary_file) is True  # fallback to content check
 
@@ -70,9 +72,10 @@ def test_handle_binary_file_with_hexdump(tmp_path: Path) -> None:
         mock_hexdump_process.stdout = MagicMock()
         mock_hexdump_process.wait.return_value = 0
 
-        with patch("subprocess.Popen", return_value=mock_hexdump_process) as mock_popen, patch(
-            "l_command.handlers.binary.smart_pager"
-        ) as mock_pager:
+        with (
+            patch("subprocess.Popen", return_value=mock_hexdump_process) as mock_popen,
+            patch("l_command.handlers.binary.smart_pager") as mock_pager,
+        ):
             BinaryHandler.handle(binary_file)
 
             # Verify Popen was called with hexdump command
