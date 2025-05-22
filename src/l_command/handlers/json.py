@@ -3,17 +3,15 @@ Handler for processing JSON files.
 """
 
 import logging
-import os
 import subprocess
 from pathlib import Path
 
 from l_command.handlers.base import FileHandler
-from l_command.utils import count_lines
+from l_command.utils import smart_pager
 
 # Constants specific to JSON handling
 JSON_CONTENT_CHECK_BYTES = 1024
 MAX_JSON_SIZE_BYTES = 10 * 1024 * 1024  # 10MB limit for jq processing
-MEDIUM_JSON_LINES_THRESHOLD = 100  # Lines threshold for using less with JSON files
 
 logger = logging.getLogger(__name__)
 
@@ -116,44 +114,27 @@ class JsonHandler(FileHandler):
                 DefaultFileHandler.handle(path)
                 return
 
-            # Count lines to determine whether to use less
-            line_count = count_lines(path)
-
-            # Get terminal height (same as in display_file_default)
+            # If validation passes, display formatted JSON with jq using smart_pager
             try:
-                terminal_height = os.get_terminal_size().lines
-            except OSError:
-                # Fallback if not running in a terminal (e.g., piped)
-                terminal_height = float("inf")  # Always use direct output
+                # Start jq process with color output
+                jq_process = subprocess.Popen(
+                    ["jq", "--color-output", ".", str(path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
 
-            # If validation passes, display formatted JSON with jq
-            try:
-                if line_count > terminal_height:
-                    # For JSON files taller than terminal, use less with color
-                    jq_process = subprocess.Popen(
-                        ["jq", "--color-output", ".", str(path)],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                    )
-                    subprocess.run(
-                        ["less", "-R"],  # -R preserves color codes
-                        stdin=jq_process.stdout,
-                        check=True,
-                    )
-                    jq_process.stdout.close()
-                    # Check if jq process failed
-                    jq_retcode = jq_process.wait()
-                    if jq_retcode != 0:
-                        logger.error(
-                            f"jq process exited with code {jq_retcode}",
-                        )
-                        from l_command.handlers.default import DefaultFileHandler
+                # Use smart_pager to handle the output
+                smart_pager(jq_process, ["less", "-R"])
 
-                        DefaultFileHandler.handle(path)
-                else:
-                    # For small JSON files, display directly
-                    subprocess.run(["jq", ".", str(path)], check=True)
-            except subprocess.CalledProcessError as e:
+                # Check if jq process failed
+                jq_retcode = jq_process.wait()
+                if jq_retcode != 0:
+                    logger.error(f"jq process exited with code {jq_retcode}")
+                    from l_command.handlers.default import DefaultFileHandler
+
+                    DefaultFileHandler.handle(path)
+
+            except subprocess.SubprocessError as e:
                 logger.error(f"Error displaying JSON with jq: {e}")
                 # Fallback even if formatting fails after validation
                 from l_command.handlers.default import DefaultFileHandler

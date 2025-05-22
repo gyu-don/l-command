@@ -2,13 +2,15 @@
 Handler for processing archive files such as ZIP and TAR formats.
 """
 
-import os
+import logging
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 from l_command.handlers.base import FileHandler
+from l_command.utils import smart_pager
+
+logger = logging.getLogger(__name__)
 
 
 class ArchiveHandler(FileHandler):
@@ -39,41 +41,21 @@ class ArchiveHandler(FileHandler):
         name = path.name.lower()
 
         try:
-            # Get terminal height
-            terminal_height = os.get_terminal_size().lines
-        except OSError:
-            # Fallback if not running in a terminal (e.g., piped)
-            terminal_height = float("inf")  # Always use direct output
-
-        # Use less if output is taller than terminal height
-        try:
             if suffix == ".zip" or suffix in [".jar", ".war", ".ear", ".apk", ".ipa"]:
-                # First subprocess call to count lines
-                process = subprocess.Popen(
+                # Start unzip process
+                unzip_process = subprocess.Popen(
                     ["unzip", "-l", str(path)],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
-                stdout, _ = process.communicate()
-                line_count = stdout.decode("utf-8").count("\n")
 
-                # Second subprocess call to display content
-                if line_count > terminal_height:
-                    unzip_process = subprocess.Popen(
-                        ["unzip", "-l", str(path)],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                    )
-                    subprocess.run(["less", "-R"], stdin=unzip_process.stdout, check=True)
-                    unzip_process.stdout.close()
-                    unzip_retcode = unzip_process.wait()
-                    if unzip_retcode != 0:
-                        print(
-                            f"unzip process exited with code {unzip_retcode}",
-                            file=sys.stderr,
-                        )
-                else:
-                    subprocess.run(["unzip", "-l", str(path)], check=True)
+                # Use smart_pager to handle the output
+                smart_pager(unzip_process, ["less", "-R"])
+
+                # Check if unzip process failed
+                unzip_retcode = unzip_process.wait()
+                if unzip_retcode != 0:
+                    logger.error(f"unzip process exited with code {unzip_retcode}")
                 return
 
             if suffix == ".tar" or name.endswith(
@@ -88,30 +70,26 @@ class ArchiveHandler(FileHandler):
                         str(path),
                     ]
 
-                # First subprocess call to count lines
-                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                stdout, _ = process.communicate()
-                line_count = stdout.decode("utf-8").count("\n")
+                # Start tar process
+                tar_process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
 
-                # Second subprocess call to display content
-                if line_count > terminal_height:
-                    tar_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    subprocess.run(["less", "-R"], stdin=tar_process.stdout, check=True)
-                    tar_process.stdout.close()
-                    tar_retcode = tar_process.wait()
-                    if tar_retcode != 0:
-                        print(
-                            f"tar process exited with code {tar_retcode}",
-                            file=sys.stderr,
-                        )
-                else:
-                    subprocess.run(command, check=True)
+                # Use smart_pager to handle the output
+                smart_pager(tar_process, ["less", "-R"])
+
+                # Check if tar process failed
+                tar_retcode = tar_process.wait()
+                if tar_retcode != 0:
+                    logger.error(f"tar process exited with code {tar_retcode}")
                 return
 
-        except subprocess.CalledProcessError as e:
-            print(f"Error displaying archive with less: {e}", file=sys.stderr)
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error displaying archive: {e}")
         except OSError as e:
-            print(f"Error accessing archive file: {e}", file=sys.stderr)
+            logger.error(f"Error accessing archive file: {e}")
 
     @staticmethod
     def priority() -> int:

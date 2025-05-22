@@ -2,12 +2,14 @@
 Handler for processing directories.
 """
 
-import os
+import logging
 import subprocess
-import sys
 from pathlib import Path
 
 from l_command.handlers.base import FileHandler
+from l_command.utils import smart_pager
+
+logger = logging.getLogger(__name__)
 
 
 class DirectoryHandler(FileHandler):
@@ -29,60 +31,32 @@ class DirectoryHandler(FileHandler):
     def handle(cls: type["DirectoryHandler"], path: Path) -> None:
         """Display directory contents using ls -la, with paging if needed.
 
-        The choice between direct output and less is based on the output's line count
-        and the terminal's height.
+        The choice between direct output and pager is handled by smart_pager
+        based on the output's line count and the terminal's height.
 
         Args:
             path: The directory path to display.
         """
         try:
-            # Run ls and capture output
+            # Run ls with color output
             ls_process = subprocess.Popen(
                 ["ls", "-la", "--color=always", str(path)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
             )
 
-            # Count lines in the output
-            output_lines = ls_process.stdout.readlines() if ls_process.stdout else []
-            line_count = len(output_lines)
+            # Use smart_pager to handle the output
+            smart_pager(ls_process, ["less", "-R"])
 
-            # Get terminal height
-            try:
-                terminal_height = os.get_terminal_size().lines
-            except OSError:
-                terminal_height = float("inf")  # Fallback if not running in a terminal
+            # Check if ls process failed
+            ls_retcode = ls_process.wait()
+            if ls_retcode != 0:
+                logger.error(f"ls process exited with code {ls_retcode}")
 
-            # Use less if output is larger than terminal height
-            if line_count > terminal_height:
-                # Reset stdout position
-                ls_process = subprocess.Popen(
-                    ["ls", "-la", "--color=always", str(path)],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                if ls_process.stdout:
-                    subprocess.run(
-                        ["less", "-R"],  # -R preserves color codes
-                        stdin=ls_process.stdout,
-                        check=True,
-                    )
-                    ls_process.stdout.close()
-                    # Check if ls process failed
-                    ls_retcode = ls_process.wait()
-                    if ls_retcode != 0:
-                        print(
-                            f"ls process exited with code {ls_retcode}",
-                            file=sys.stderr,
-                        )
-            else:
-                # For small directories, display directly
-                subprocess.run(["ls", "-la", "--color=auto", str(path)], check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Error displaying directory with ls: {e}", file=sys.stderr)
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error displaying directory with ls: {e}")
         except OSError as e:
-            print(f"Error accessing directory: {e}", file=sys.stderr)
+            logger.error(f"Error accessing directory: {e}")
 
     @classmethod
     def priority(cls: type["DirectoryHandler"]) -> int:
