@@ -65,7 +65,7 @@ def smart_pager(
     try:
         terminal_height = os.get_terminal_size().lines
     except OSError:
-        terminal_height = float("inf")  # Fallback if not in a terminal
+        terminal_height = sys.maxsize  # Very large fallback if not in a terminal
 
     # Handle different content types
     if hasattr(content, "stdout") and hasattr(content, "wait"):  # It's a Popen-like object
@@ -76,7 +76,7 @@ def smart_pager(
 
 def _handle_process_with_pager(
     process: subprocess.Popen,
-    terminal_height: int | float,
+    terminal_height: int,
     pager_cmd: list[str],
 ) -> None:
     """Handle subprocess output with pager if needed.
@@ -119,7 +119,7 @@ def _handle_process_with_pager(
 
 def _handle_file_with_pager(
     file_path: Path,
-    terminal_height: int | float,
+    terminal_height: int,
     pager_cmd: list[str],
 ) -> None:
     """Handle file content with pager if needed.
