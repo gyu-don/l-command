@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "l-command"
-version = "0.2.0"
+version = "0.3.0"
 description = "Smart file and directory viewer"
 authors = [{name = "gyu-don", email = "takumi.kt@gmail.com"}]
 requires-python = ">=3.11"
