@@ -33,17 +33,31 @@ The application uses a **chain-of-responsibility pattern** with file handlers:
 ### Handler Priority Order
 
 1. `DirectoryHandler` - processes directories (runs `ls -la --color=auto`)
-2. `JsonHandler` - detects and formats JSON files using `jq`
-3. `ArchiveHandler` - lists contents of archives (zip, tar variants)
-4. `BinaryHandler` - displays binary files using `hexdump -C`
-5. `DefaultFileHandler` - handles text files (cat for short, less for long)
+2. `ImageHandler` (65) - displays images using `timg` or shows metadata
+3. `PDFHandler` (60) - extracts text from PDFs using `pdfminer.six`
+4. `MediaHandler` (55) - analyzes audio/video files using `ffprobe`
+5. `JsonHandler` (50) - detects and formats JSON files using `jq`
+6. `XMLHandler` (45) - formats XML/HTML files using `xmllint`
+7. `CSVHandler` (40) - displays CSV/TSV files with table structure
+8. `MarkdownHandler` (35) - renders Markdown using `glow`, `mdcat`, or `pandoc`
+9. `YAMLHandler` (30) - formats YAML files using `yq`
+10. `ArchiveHandler` (80) - lists contents of archives (zip, tar variants)
+11. `BinaryHandler` (20) - displays binary files using `hexdump -C`
+12. `DefaultFileHandler` (0) - handles text files (cat for short, less for long)
 
 ### Key Behaviors
 
+- **PDF Detection**: Files with `.pdf` extension OR content starting with `%PDF-`
+- **Image Detection**: Various extensions and magic bytes (PNG, JPEG, GIF, BMP, WebP, TIFF)
+- **Media Detection**: Audio/video extensions (.mp3, .mp4, .mkv, etc.)
 - **JSON Detection**: Files with `.json` extension OR files starting with `{`/`[` (with UTF-8 validation)
+- **XML/HTML Detection**: Extensions (.xml, .html, etc.) OR XML/HTML content patterns
+- **CSV Detection**: Extensions (.csv, .tsv) OR consistent delimiter patterns
+- **Markdown Detection**: Extensions (.md, .markdown, etc.)
+- **YAML Detection**: Extensions (.yaml, .yml) OR YAML document markers and structure
 - **Archive Detection**: Supports ZIP, TAR variants (.tar.gz, .tgz, .tar.bz2, etc.)
 - **Binary Detection**: Uses `file` command when available, falls back to null-byte detection
-- **Smart Paging**: Uses terminal height to decide between `cat` and `less -RFX`
+- **Smart Paging**: Uses terminal height to decide between direct output and pager
 
 ### Project Structure
 

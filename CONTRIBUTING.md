@@ -215,6 +215,7 @@ l-command/
 ├── README.md
 ├── LICENSE
 ├── CONTRIBUTING.md           # This development guide
+├── CLAUDE.md                 # Claude Code development instructions
 ├── pyproject.toml            # Project metadata, build settings
 ├── src/
 │   └── l_command/
@@ -223,15 +224,26 @@ l-command/
 │       ├── constants.py      # Constants
 │       ├── utils.py          # Utility functions
 │       └── handlers/         # File type handlers
-│           ├── __init__.py
+│           ├── __init__.py   # Handler registry
 │           ├── base.py       # Base handler class
 │           ├── default.py    # Default file handler
 │           ├── directory.py  # Directory handler
 │           ├── json.py       # JSON handler
+│           ├── pdf.py        # PDF handler
+│           ├── image.py      # Image handler
+│           ├── media.py      # Audio/Video handler
+│           ├── xml.py        # XML/HTML handler
+│           ├── csv.py        # CSV/TSV handler
+│           ├── markdown.py   # Markdown handler
+│           ├── yaml.py       # YAML handler
 │           ├── archive.py    # Archive handler
 │           └── binary.py     # Binary handler
 ├── tests/                    # Tests
-└── .cursordocs/              # Project documentation
+│   ├── test_*_handler.py     # Handler-specific tests
+│   ├── test_utils.py         # Utility function tests
+│   ├── test_cli.py           # CLI integration tests
+│   └── test_files/           # Test data files
+└── .github/                  # GitHub workflows and templates
 ```
 
 ## Dependency Management
