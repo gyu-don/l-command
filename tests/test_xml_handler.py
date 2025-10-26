@@ -64,7 +64,7 @@ def test_priority() -> None:
 
 
 @patch("subprocess.Popen")
-def test_xmllint_timeout_handling(mock_popen) -> None:
+def test_xmllint_timeout_handling(mock_popen: MagicMock) -> None:
     """Test that xmllint timeout is handled gracefully."""
     # Create a mock process that will timeout on wait()
     mock_process = MagicMock()

@@ -5,7 +5,7 @@ Tests for MediaHandler.
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from l_command.handlers.media import MediaHandler
 
@@ -34,7 +34,7 @@ def test_priority() -> None:
 
 
 @patch("subprocess.run")
-def test_ffprobe_timeout_handling(mock_run) -> None:
+def test_ffprobe_timeout_handling(mock_run: MagicMock) -> None:
     """Test that ffprobe timeout is handled gracefully."""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="ffprobe", timeout=60)
 

@@ -1,7 +1,7 @@
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from l_command.handlers.json import JsonHandler
 
@@ -94,7 +94,7 @@ def test_should_try_jq_with_test_files() -> None:
 
 
 @patch("subprocess.run")
-def test_jq_timeout_handling(mock_run) -> None:
+def test_jq_timeout_handling(mock_run: MagicMock) -> None:
     """Test that jq timeout is handled gracefully."""
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="jq", timeout=30)
 
