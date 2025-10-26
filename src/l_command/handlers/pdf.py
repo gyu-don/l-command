@@ -6,6 +6,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_RENDERING
 from l_command.handlers.base import FileHandler
 
 # Constants specific to PDF handling
@@ -103,7 +104,12 @@ class PDFHandler(FileHandler):
                             try:
                                 pager_process.stdin.write(text_content)
                                 pager_process.stdin.close()
-                                pager_process.wait()
+                                pager_process.wait(timeout=TIMEOUT_RENDERING)
+                            except subprocess.TimeoutExpired:
+                                pager_process.kill()
+                                logger.warning(
+                                    f"Pager timed out after {TIMEOUT_RENDERING}s while displaying PDF content.",
+                                )
                             except BrokenPipeError:
                                 # User exited pager early
                                 pass

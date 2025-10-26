@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_RENDERING
 from l_command.handlers.base import FileHandler
 from l_command.utils import count_lines, smart_pager
 
@@ -101,6 +102,7 @@ class MarkdownHandler(FileHandler):
                 subprocess.run(
                     ["glow", str(path)],
                     check=True,
+                    timeout=TIMEOUT_RENDERING,
                 )
                 return True
 
@@ -117,14 +119,19 @@ class MarkdownHandler(FileHandler):
                 subprocess.run(
                     ["glow", "-p", str(path)],
                     check=True,
+                    timeout=TIMEOUT_RENDERING,
                 )
             else:
                 # Use glow without pager for short content
                 subprocess.run(
                     ["glow", str(path)],
                     check=True,
+                    timeout=TIMEOUT_RENDERING,
                 )
             return True
+        except subprocess.TimeoutExpired:
+            logger.warning(f"glow timed out after {TIMEOUT_RENDERING}s while rendering {path.name}")
+            return False
         except FileNotFoundError:
             return False
         except subprocess.CalledProcessError:
@@ -152,7 +159,12 @@ class MarkdownHandler(FileHandler):
             smart_pager(mdcat_process, ["less", "-R"])
 
             # Check if mdcat process failed
-            mdcat_retcode = mdcat_process.wait()
+            try:
+                mdcat_retcode = mdcat_process.wait(timeout=TIMEOUT_RENDERING)
+            except subprocess.TimeoutExpired:
+                mdcat_process.kill()
+                logger.warning(f"mdcat timed out after {TIMEOUT_RENDERING}s while rendering {path.name}")
+                return False
             return mdcat_retcode == 0
         except FileNotFoundError:
             return False
@@ -181,7 +193,12 @@ class MarkdownHandler(FileHandler):
             smart_pager(pandoc_process, ["less", "-R"])
 
             # Check if pandoc process failed
-            pandoc_retcode = pandoc_process.wait()
+            try:
+                pandoc_retcode = pandoc_process.wait(timeout=TIMEOUT_RENDERING)
+            except subprocess.TimeoutExpired:
+                pandoc_process.kill()
+                logger.warning(f"pandoc timed out after {TIMEOUT_RENDERING}s while converting {path.name}")
+                return False
             return pandoc_retcode == 0
         except FileNotFoundError:
             return False
@@ -213,9 +230,14 @@ class MarkdownHandler(FileHandler):
             smart_pager(bat_process, ["less", "-R"])
 
             # Check if bat process failed
-            bat_retcode = bat_process.wait()
-            if bat_retcode == 0:
-                return
+            try:
+                bat_retcode = bat_process.wait(timeout=TIMEOUT_RENDERING)
+            except subprocess.TimeoutExpired:
+                bat_process.kill()
+                logger.warning(f"bat timed out after {TIMEOUT_RENDERING}s")
+            else:
+                if bat_retcode == 0:
+                    return
         except FileNotFoundError:
             pass
         except subprocess.SubprocessError:

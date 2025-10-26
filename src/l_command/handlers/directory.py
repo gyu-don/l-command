@@ -6,6 +6,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_QUICK
 from l_command.handlers.base import FileHandler
 from l_command.utils import smart_pager
 
@@ -49,7 +50,13 @@ class DirectoryHandler(FileHandler):
             smart_pager(ls_process, ["less", "-R"])
 
             # Check if ls process failed
-            ls_retcode = ls_process.wait()
+            try:
+                ls_retcode = ls_process.wait(timeout=TIMEOUT_QUICK)
+            except subprocess.TimeoutExpired:
+                ls_process.kill()
+                logger.warning(f"ls timed out after {TIMEOUT_QUICK}s while listing {path}")
+                return
+
             if ls_retcode != 0:
                 logger.error(f"ls process exited with code {ls_retcode}")
 

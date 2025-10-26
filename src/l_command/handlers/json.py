@@ -6,6 +6,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_QUICK
 from l_command.handlers.base import FileHandler
 from l_command.utils import smart_pager
 
@@ -90,7 +91,16 @@ class JsonHandler(FileHandler):
                     check=True,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    timeout=TIMEOUT_QUICK,
                 )
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    f"jq validation timed out after {TIMEOUT_QUICK}s. Falling back to default viewer.",
+                )
+                from l_command.handlers.default import DefaultFileHandler
+
+                DefaultFileHandler.handle(path)
+                return
             except FileNotFoundError:
                 logger.warning(
                     "jq command not found. Falling back to default viewer.",
@@ -127,7 +137,16 @@ class JsonHandler(FileHandler):
                 smart_pager(jq_process, ["less", "-R"])
 
                 # Check if jq process failed
-                jq_retcode = jq_process.wait()
+                try:
+                    jq_retcode = jq_process.wait(timeout=TIMEOUT_QUICK)
+                except subprocess.TimeoutExpired:
+                    jq_process.kill()
+                    logger.warning(f"jq formatting timed out after {TIMEOUT_QUICK}s")
+                    from l_command.handlers.default import DefaultFileHandler
+
+                    DefaultFileHandler.handle(path)
+                    return
+
                 if jq_retcode != 0:
                     logger.error(f"jq process exited with code {jq_retcode}")
                     from l_command.handlers.default import DefaultFileHandler
