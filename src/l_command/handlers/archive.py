@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_PROCESSING
 from l_command.handlers.base import FileHandler
 from l_command.utils import smart_pager
 
@@ -53,7 +54,13 @@ class ArchiveHandler(FileHandler):
                 smart_pager(unzip_process, ["less", "-R"])
 
                 # Check if unzip process failed
-                unzip_retcode = unzip_process.wait()
+                try:
+                    unzip_retcode = unzip_process.wait(timeout=TIMEOUT_PROCESSING)
+                except subprocess.TimeoutExpired:
+                    unzip_process.kill()
+                    logger.warning(f"unzip timed out after {TIMEOUT_PROCESSING}s while listing {path.name}")
+                    return
+
                 if unzip_retcode != 0:
                     logger.error("unzip process exited with code %s", unzip_retcode)
                 return
@@ -81,7 +88,13 @@ class ArchiveHandler(FileHandler):
                 smart_pager(tar_process, ["less", "-R"])
 
                 # Check if tar process failed
-                tar_retcode = tar_process.wait()
+                try:
+                    tar_retcode = tar_process.wait(timeout=TIMEOUT_PROCESSING)
+                except subprocess.TimeoutExpired:
+                    tar_process.kill()
+                    logger.warning(f"tar timed out after {TIMEOUT_PROCESSING}s while listing {path.name}")
+                    return
+
                 if tar_retcode != 0:
                     logger.error("tar process exited with code %s", tar_retcode)
                 return

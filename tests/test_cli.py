@@ -328,6 +328,7 @@ def test_json_handler_small_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                timeout=30,
             )
 
             # Verify subprocess.Popen was called for jq
@@ -377,6 +378,7 @@ def test_json_handler_large_valid_json(tmp_path: Path, monkeypatch: MonkeyPatch)
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                timeout=30,
             )
 
             # Verify subprocess.Popen was called for jq
@@ -446,6 +448,7 @@ def test_json_handler_invalid_json(tmp_path: Path, monkeypatch: MonkeyPatch) -> 
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=30,
         )
 
         # Verify DefaultFileHandler.handle was called
@@ -483,6 +486,7 @@ def test_json_handler_jq_not_found(tmp_path: Path, monkeypatch: MonkeyPatch) -> 
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=30,
         )
 
         # Verify DefaultFileHandler.handle was called

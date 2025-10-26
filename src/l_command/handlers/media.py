@@ -7,6 +7,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_PROCESSING
 from l_command.handlers.base import FileHandler
 
 # Constants specific to media handling
@@ -83,10 +84,19 @@ class MediaHandler(FileHandler):
                     capture_output=True,
                     text=True,
                     check=True,
+                    timeout=TIMEOUT_PROCESSING,
                 )
 
                 media_info = json.loads(result.stdout)
                 cls._display_media_info(path, file_size, media_info)
+                return
+
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    f"ffprobe timed out after {TIMEOUT_PROCESSING}s "
+                    f"while analyzing {path.name}. File may be too large or corrupted.",
+                )
+                cls._show_basic_info(path, file_size)
                 return
 
             except FileNotFoundError:

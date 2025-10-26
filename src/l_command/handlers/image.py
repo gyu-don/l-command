@@ -6,6 +6,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_QUICK, TIMEOUT_RENDERING
 from l_command.handlers.base import FileHandler
 
 # Constants specific to image handling
@@ -94,9 +95,17 @@ class ImageHandler(FileHandler):
                 subprocess.run(
                     ["timg", "--fit-width", "--rotate=exif", str(path)],
                     check=True,
+                    timeout=TIMEOUT_RENDERING,
                 )
                 # Show basic info after image
                 print(f"\nImage: {path.name} ({file_size:,} bytes)")
+                return
+
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    f"timg timed out after {TIMEOUT_RENDERING}s while rendering {path.name}.",
+                )
+                cls._show_image_info(path, file_size)
                 return
 
             except FileNotFoundError:
@@ -139,6 +148,7 @@ class ImageHandler(FileHandler):
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=TIMEOUT_QUICK,
             )
             output = result.stdout.strip()
             # Extract dimensions if available in file output
@@ -150,7 +160,7 @@ class ImageHandler(FileHandler):
                 if dimension_match:
                     width, height = dimension_match.groups()
                     print(f"Dimensions: {width} × {height} pixels")
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             pass
 
         print("(Install 'timg' for terminal image display)")

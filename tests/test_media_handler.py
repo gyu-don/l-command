@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, patch
 
 from l_command.handlers.media import MediaHandler
 
@@ -187,3 +188,23 @@ def test_handle_media_os_error(tmp_path: Path, mocker: "MockerFixture") -> None:
 
     # Should fall back to default handler
     mock_default.assert_called_once_with(media_file)
+
+
+@patch("subprocess.run")
+def test_ffprobe_timeout_handling(mock_run: MagicMock) -> None:
+    """Test that ffprobe timeout is handled gracefully."""
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="ffprobe", timeout=60)
+
+    with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb") as tmp:
+        tmp.write(b"fake video content")
+        tmp.flush()
+        path = Path(tmp.name)
+
+        # Should not raise an exception
+        MediaHandler.handle(path)
+
+        # Verify subprocess.run was called with timeout parameter
+        assert mock_run.called
+        call_args = mock_run.call_args
+        assert call_args is not None
+        assert "timeout" in call_args.kwargs or (len(call_args.args) > 0 and "timeout" in str(call_args))
