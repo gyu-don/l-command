@@ -8,25 +8,37 @@
 
 ### Phase 1: 基本構造の実装
 
-#### Task 1: 依存関係の追加
+#### Task 1: Python要件の確認と設定
 
-**目的**: TOMLパーサーを依存関係に追加
+**目的**: Python 3.11+の標準ライブラリ`tomllib`が使用可能であることを確認し、プロジェクト要件を明示
+
+**要件**: Python 3.11以上
 
 **実装内容**:
+
+1. **Python バージョン確認**:
 ```bash
-# Python 3.11+ の場合、標準ライブラリの tomllib を使用
-# Python 3.10 以下の場合は tomli を追加
-uv add tomli --python "< 3.11"
+python --version  # 3.11以上であることを確認
 ```
 
-**ファイル**: `pyproject.toml`
+2. **pyproject.toml の更新** (必要に応じて):
+```toml
+[project]
+requires-python = ">=3.11"
+```
+
+**ファイル**:
+- `pyproject.toml` (Python要件の明示)
+- 変更なし（標準ライブラリの`tomllib`を使用）
 
 **検証方法**:
 ```bash
-uv run python -c "import tomllib"  # Python 3.11+
-# または
-uv run python -c "import tomli"   # Python 3.10以下
+uv run python -c "import tomllib; print('tomllib available')"
 ```
+
+**注意**:
+- Python 3.11未満の環境では設定ファイル機能は利用できません
+- 設定ファイルが使えない場合は、デフォルト設定で動作します（下位互換性）
 
 ---
 
@@ -40,15 +52,10 @@ uv run python -c "import tomli"   # Python 3.10以下
 ```python
 """Configuration management for l-command."""
 
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
-
-# Python 3.11+ では tomllib、それ以下では tomli を使用
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
+from typing import Any, Optional
 
 
 @dataclass
@@ -59,10 +66,12 @@ class HandlerConfig:
         enabled: Whether the handler is enabled.
         priority: Priority of the handler (higher is evaluated first).
                   If None, use the handler's default priority.
+        options: Handler-specific options (arbitrary key-value pairs).
     """
 
     enabled: bool = True
     priority: Optional[int] = None
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -70,7 +79,8 @@ class GeneralConfig:
     """General configuration.
 
     Attributes:
-        version: Configuration file version for future compatibility.
+        version: Configuration file schema version for future compatibility.
+                 Format: "{major}.{minor}" (e.g., "1.0", "1.1", "2.0")
     """
 
     version: str = "1.0"
@@ -122,6 +132,7 @@ def test_default_config():
     assert len(config.handlers) == 12
     assert config.handlers["json"].enabled is True
     assert config.handlers["json"].priority == 50
+    assert config.handlers["json"].options == {}
 ```
 
 ---
@@ -253,7 +264,13 @@ def validate_handler_config(name: str, data: dict) -> Optional[HandlerConfig]:
         logger.warning(f"Invalid 'priority' value for handler '{name}': expected int, got {type(priority)}")
         priority = None
 
-    return HandlerConfig(enabled=enabled, priority=priority)
+    # Parse handler-specific options
+    options = data.get("options", {})
+    if not isinstance(options, dict):
+        logger.warning(f"Invalid 'options' value for handler '{name}': expected dict, got {type(options)}")
+        options = {}
+
+    return HandlerConfig(enabled=enabled, priority=priority, options=options)
 
 
 def load_config_from_dict(data: dict) -> Config:
@@ -334,6 +351,10 @@ def test_load_config_with_overrides(tmp_path):
 enabled = false
 priority = 70
 
+[handlers.json.options]
+jq_args = ["--indent", "2"]
+max_size_mb = 20
+
 [handlers.pdf]
 priority = 100
 """)
@@ -341,8 +362,10 @@ priority = 100
     config = load_config(config_file)
     assert config.handlers["json"].enabled is False
     assert config.handlers["json"].priority == 70
+    assert config.handlers["json"].options == {"jq_args": ["--indent", "2"], "max_size_mb": 20}
     assert config.handlers["pdf"].enabled is True
     assert config.handlers["pdf"].priority == 100
+    assert config.handlers["pdf"].options == {}
 ```
 
 ---
@@ -533,8 +556,9 @@ def main() -> None:
 
 ### Python バージョン問題
 
-- Python 3.11未満の場合は`tomli`を使用
-- `try-except`で両方をサポート
+- **要件**: Python 3.11以上が必須
+- Python 3.11未満の環境では設定ファイル機能は利用できません
+- バージョンチェックを実装し、3.11未満の場合は警告を表示してデフォルト設定を使用
 
 ### パーミッション問題
 
@@ -559,3 +583,49 @@ def main() -> None:
 - `version`フィールドを活用した後方互換性チェック
 - バリデーション機能の拡張ポイント
 - ハンドラー固有設定の追加準備
+- `options`セクションの各ハンドラーでの実装
+
+## 追加の考慮事項
+
+### Python 3.11 要件の明示
+
+プロジェクトの`pyproject.toml`で Python 3.11以上を要求することを推奨：
+
+```toml
+[project]
+requires-python = ">=3.11"
+```
+
+ただし、設定ファイル機能が使えない場合でも基本機能は動作するよう、graceful degradationを実装：
+
+```python
+import sys
+
+def load_config(path: Optional[Path] = None) -> Config:
+    """Load configuration from file or return default."""
+    if sys.version_info < (3, 11):
+        logger.warning("Configuration file support requires Python 3.11+. Using defaults.")
+        return Config.default()
+
+    # ... 通常の処理 ...
+```
+
+### ハンドラー固有オプションの実装
+
+Phase 1では`options`を辞書として格納し、Phase 2以降で各ハンドラーが解釈します：
+
+```python
+# Phase 2 以降の実装例（JSONHandler）
+class JsonHandler(FileHandler):
+    @classmethod
+    def handle(cls, path: Path, options: dict[str, Any] = None) -> None:
+        if options is None:
+            options = {}
+
+        # オプションから設定を取得
+        jq_args = options.get("jq_args", [])
+        max_size_mb = options.get("max_size_mb", 10)
+
+        # オプションを使用した処理
+        # ...
+```

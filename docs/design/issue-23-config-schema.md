@@ -80,6 +80,7 @@ version = "1.0"
 # - enabled を指定しない場合、デフォルトで有効
 # - priority を指定しない場合、ハードコードされたデフォルト値を使用
 # - DirectoryHandler と DefaultFileHandler は無効化できない（システムの基本動作）
+# - options セクションでハンドラー固有の設定が可能（将来の拡張用）
 
 # ディレクトリハンドラー（無効化不可）
 [handlers.directory]
@@ -101,6 +102,11 @@ priority = 65  # デフォルト: 65
 enabled = true
 priority = 60  # デフォルト: 60
 
+# PDFハンドラー固有のオプション（将来の拡張用）
+# [handlers.pdf.options]
+# backend = "pdfminer"  # PDFテキスト抽出バックエンド（pdfminer, pdftotext, pypdfなど）
+# extract_images = false  # 画像も抽出するか
+
 # バイナリハンドラー
 [handlers.binary]
 enabled = true
@@ -116,6 +122,11 @@ priority = 55  # デフォルト: 55
 [handlers.json]
 enabled = true
 priority = 50  # デフォルト: 50
+
+# JSONハンドラー固有のオプション（将来の拡張用）
+# [handlers.json.options]
+# jq_args = ["--indent", "2"]  # jqに渡す追加引数
+# max_size_mb = 10  # 処理する最大ファイルサイズ
 
 # XML/HTMLハンドラー
 [handlers.xml]
@@ -182,6 +193,28 @@ enabled = false
 enabled = false
 ```
 
+#### 例5: ハンドラー固有オプションの使用（将来の拡張例）
+
+```toml
+# JSONハンドラーの詳細設定
+[handlers.json]
+enabled = true
+priority = 50
+
+[handlers.json.options]
+jq_args = ["--indent", "2", "--sort-keys"]
+max_size_mb = 20
+
+# PDFハンドラーのバックエンド指定
+[handlers.pdf]
+enabled = true
+priority = 60
+
+[handlers.pdf.options]
+backend = "pdfminer"
+extract_images = false
+```
+
 ## データ構造設計
 
 ### Python側のデータ構造
@@ -195,11 +228,12 @@ class HandlerConfig:
     """個別ハンドラーの設定."""
     enabled: bool = True
     priority: Optional[int] = None  # None の場合はデフォルト値を使用
+    options: dict[str, Any] = field(default_factory=dict)  # ハンドラー固有のオプション
 
 @dataclass
 class GeneralConfig:
     """グローバル設定."""
-    version: str = "1.0"
+    version: str = "1.0"  # 設定ファイルスキーマのバージョン
 
 @dataclass
 class Config:
@@ -229,12 +263,87 @@ class Config:
         )
 ```
 
+## 設定ファイルバージョニング
+
+### `general.version` の意味
+
+設定ファイルの`version`フィールドは、**設定ファイルスキーマのバージョン**を示します。
+
+#### バージョンアップのタイミング
+
+| 変更の種類 | バージョンの変更 | 例 |
+|-----------|-----------------|---|
+| **新しいハンドラーの追加** | バージョンアップ不要 | `handlers.toml`が追加される |
+| **新しいオプションの追加（後方互換性あり）** | マイナーバージョンアップ（1.0 → 1.1） | `general.pager_option`が追加される |
+| **既存オプションの削除・名称変更** | メジャーバージョンアップ（1.0 → 2.0） | `handlers.json.enabled`が`handlers.json.active`に変更される |
+| **スキーマ構造の大幅変更** | メジャーバージョンアップ（1.0 → 2.0） | `[handlers]`が`[file_handlers]`に変更される |
+
+#### バージョン形式
+
+- **形式**: `"{major}.{minor}"` （例: `"1.0"`, `"1.1"`, `"2.0"`）
+- **メジャーバージョン**: 破壊的変更（既存の設定ファイルが動作しなくなる可能性）
+- **マイナーバージョン**: 後方互換性のある新機能追加
+
+#### 実装での扱い
+
+- Phase 1では`version`フィールドを読み込むが、バージョンチェックは行わない
+- Phase 2以降でバージョンに応じた互換性処理を実装予定
+- 将来的に古いバージョンの設定ファイルを自動的にマイグレーションする機能を追加予定
+
+### ハンドラー固有オプション（`handlers.{name}.options`）
+
+各ハンドラーは`options`セクションで固有の設定を持つことができます。これにより、ハンドラーごとの詳細な動作をカスタマイズ可能です。
+
+#### 現在の実装方針
+
+- **Phase 1**: `options`セクションをパースして`HandlerConfig.options`に格納（辞書型）
+- **Phase 2以降**: 各ハンドラーが`options`を解釈して動作を変更
+
+#### 将来的な拡張例
+
+**JSONハンドラー**:
+```toml
+[handlers.json.options]
+jq_args = ["--indent", "2", "--sort-keys"]  # jqに渡す追加引数
+max_size_mb = 10  # 処理する最大ファイルサイズ（MB）
+color_output = true  # カラー出力の有効化
+```
+
+**PDFハンドラー**:
+```toml
+[handlers.pdf.options]
+backend = "pdfminer"  # バックエンド: pdfminer, pdftotext, pypdf
+extract_images = false  # 画像も抽出するか
+max_pages = 100  # 処理する最大ページ数
+```
+
+**Markdownハンドラー**:
+```toml
+[handlers.markdown.options]
+renderer = "glow"  # レンダラー: glow, mdcat, pandoc
+theme = "dark"  # カラーテーマ
+width = 100  # 表示幅
+```
+
+#### 注意事項
+
+- `options`セクションは任意（省略可能）
+- 不明なオプションキーは警告を出力して無視
+- ハンドラーが`options`を解釈しない場合、設定は無視される（エラーにはならない）
+- Phase 1では`options`の構造のみを実装し、実際の適用はPhase 2以降
+
 ## 実装方針
+
+### 0. Python要件
+
+- **必須バージョン**: Python 3.11以上
+- Python 3.11未満の環境では設定ファイル機能は利用できません（デフォルト設定で動作）
+- `pyproject.toml`で`requires-python = ">=3.11"`を設定推奨
 
 ### 1. 設定ファイルの読み込み
 
 - `tomllib`（Python 3.11+の標準ライブラリ）を使用してTOMLをパース
-- Python 3.10以下の場合は `tomli` を依存関係に追加
+- 外部依存なし（標準ライブラリのみ）
 
 ### 2. 設定のマージ
 

@@ -24,6 +24,7 @@ version = "1.0"
 # - enabled を省略した場合、デフォルトで有効
 # - priority を省略した場合、ハードコードされたデフォルト値を使用
 # - DirectoryHandler と DefaultFileHandler は無効化できません
+# - options セクションでハンドラー固有の設定が可能（将来の拡張用）
 
 # ディレクトリハンドラー（無効化不可）
 [handlers.directory]
@@ -44,6 +45,11 @@ priority = 65  # デフォルト: 65
 enabled = true
 priority = 60  # デフォルト: 60
 
+# PDFハンドラー固有のオプション（将来の拡張用）
+# [handlers.pdf.options]
+# backend = "pdfminer"
+# extract_images = false
+
 # バイナリハンドラー
 [handlers.binary]
 enabled = true
@@ -58,6 +64,11 @@ priority = 55  # デフォルト: 55
 [handlers.json]
 enabled = true
 priority = 50  # デフォルト: 50
+
+# JSONハンドラー固有のオプション（将来の拡張用）
+# [handlers.json.options]
+# jq_args = ["--indent", "2", "--sort-keys"]
+# max_size_mb = 10
 
 # XML/HTMLハンドラー
 [handlers.xml]
@@ -104,3 +115,16 @@ priority = 30  # デフォルト: 30
 # enabled = false
 # [handlers.media]
 # enabled = false
+
+# 例5: ハンドラー固有オプションの使用（将来の拡張例）
+# [handlers.json]
+# enabled = true
+# [handlers.json.options]
+# jq_args = ["--indent", "4"]
+# max_size_mb = 20
+#
+# [handlers.pdf]
+# enabled = true
+# [handlers.pdf.options]
+# backend = "pdfminer"
+# extract_images = false
