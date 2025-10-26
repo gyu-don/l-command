@@ -1,0 +1,106 @@
+# l-command サンプル設定ファイル
+# このファイルを以下の場所にコピーして使用してください:
+# - ~/.config/l-command/config.toml (推奨)
+# - ~/.l-command/config.toml
+# - ./l-command.toml (プロジェクト固有設定用)
+
+# ===========================
+# グローバル設定
+# ===========================
+[general]
+# 設定ファイルのバージョン（将来の互換性のため）
+version = "1.0"
+
+# ===========================
+# ハンドラー設定
+# ===========================
+# 各ハンドラーの有効化/無効化と優先順位の設定
+#
+# 設定可能な項目:
+# - enabled: ハンドラーの有効化 (true/false)
+# - priority: 優先順位 (整数値、高いほど優先)
+#
+# 注意事項:
+# - enabled を省略した場合、デフォルトで有効
+# - priority を省略した場合、ハードコードされたデフォルト値を使用
+# - DirectoryHandler と DefaultFileHandler は無効化できません
+
+# ディレクトリハンドラー（無効化不可）
+[handlers.directory]
+priority = 100  # デフォルト: 100
+
+# アーカイブハンドラー
+[handlers.archive]
+enabled = true
+priority = 80  # デフォルト: 80
+
+# 画像ハンドラー
+[handlers.image]
+enabled = true
+priority = 65  # デフォルト: 65
+
+# PDFハンドラー
+[handlers.pdf]
+enabled = true
+priority = 60  # デフォルト: 60
+
+# バイナリハンドラー
+[handlers.binary]
+enabled = true
+priority = 60  # デフォルト: 60
+
+# メディアハンドラー（音声/動画）
+[handlers.media]
+enabled = true
+priority = 55  # デフォルト: 55
+
+# JSONハンドラー
+[handlers.json]
+enabled = true
+priority = 50  # デフォルト: 50
+
+# XML/HTMLハンドラー
+[handlers.xml]
+enabled = true
+priority = 45  # デフォルト: 45
+
+# CSV/TSVハンドラー
+[handlers.csv]
+enabled = true
+priority = 40  # デフォルト: 40
+
+# Markdownハンドラー
+[handlers.markdown]
+enabled = true
+priority = 35  # デフォルト: 35
+
+# YAMLハンドラー
+[handlers.yaml]
+enabled = true
+priority = 30  # デフォルト: 30
+
+# デフォルトハンドラー（無効化不可）
+# [handlers.default]
+# priority = 0  # 変更不可
+
+# ===========================
+# ユースケース別の設定例
+# ===========================
+
+# 例1: PDFハンドラーを無効化
+# [handlers.pdf]
+# enabled = false
+
+# 例2: JSONの優先順位を上げる
+# [handlers.json]
+# priority = 70
+
+# 例3: Markdownをプレーンテキストとして扱う
+# [handlers.markdown]
+# enabled = false
+
+# 例4: 画像とメディアを無効化（軽量モード）
+# [handlers.image]
+# enabled = false
+# [handlers.media]
+# enabled = false
