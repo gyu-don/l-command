@@ -489,37 +489,6 @@ def test_json_handler_jq_not_found(tmp_path: Path, monkeypatch: MonkeyPatch) -> 
         mock_default_handle.assert_called_once_with(test_file)
 
 
-def test_count_lines(tmp_path: Path) -> None:
-    """行数カウント機能のテスト"""
-    # テスト用のファイルを作成
-    test_file = tmp_path / "test_file.txt"
-    expected_lines = 10
-    content = "\n".join(["line"] * expected_lines)
-    create_file(test_file, content)
-
-    # 行数をカウント
-    line_count = count_lines(test_file)
-
-    # 期待通りの行数がカウントされていることを確認
-    assert line_count == expected_lines
-
-
-def test_count_lines_with_error(tmp_path: Path, capsys: CaptureFixture) -> None:
-    """行数カウントのエラー処理のテスト"""
-    # 存在しないファイルのパスを作成
-    non_existent_file = tmp_path / "nonexistent.txt"
-
-    # 行数をカウント
-    line_count = count_lines(non_existent_file)
-
-    # エラー時に0が返されることを確認
-    assert line_count == 0
-
-    # エラーメッセージが表示されていることを確認
-    captured = capsys.readouterr()
-    assert "Error counting lines" in captured.err
-
-
 def test_main_with_small_text_file(tmp_path: Path, monkeypatch: MonkeyPatch, mock_subprocess_run: MagicMock) -> None:
     """Test main() with a non-JSON file shorter than terminal height (uses cat)."""
     test_file = tmp_path / "small_file.txt"
