@@ -165,7 +165,7 @@ def test_handle_csv_with_many_rows(tmp_path: Path, capsys: "CaptureFixture") -> 
     with csv_file.open("w") as f:
         f.write("id,value\n")
         for i in range(MAX_PREVIEW_ROWS + 20):
-            f.write(f"{i},{i*10}\n")
+            f.write(f"{i},{i * 10}\n")
 
     CSVHandler.handle(csv_file)
 
