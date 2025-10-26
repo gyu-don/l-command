@@ -143,7 +143,7 @@ def test_handle_csv_read_error(tmp_path: Path, mocker: "MockerFixture") -> None:
     csv_file.write_text("col1,col2\nval1,val2\n")
 
     # Mock stat to succeed but file open to fail
-    def mock_path_open(*args, **kwargs):
+    def mock_path_open(*args: object, **kwargs: object) -> None:
         raise OSError("Permission denied")
 
     mocker.patch.object(Path, "open", side_effect=mock_path_open)

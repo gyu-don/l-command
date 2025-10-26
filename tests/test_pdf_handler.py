@@ -2,7 +2,6 @@
 Tests for PDFHandler.
 """
 
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -173,7 +172,7 @@ def test_handle_pdf_pdfminer_not_available(tmp_path: Path, mocker: "MockerFixtur
     pdf_file.write_bytes(b"%PDF-1.4\n%content")
 
     # Mock ImportError for pdfminer
-    def mock_import(name, *args, **kwargs):
+    def mock_import(name: str, *args: object, **kwargs: object) -> object:
         if "pdfminer" in name:
             raise ImportError("No module named 'pdfminer'")
         return __import__(name, *args, **kwargs)

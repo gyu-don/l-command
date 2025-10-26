@@ -114,7 +114,7 @@ def test_handle_xml_with_xmllint(tmp_path: Path, mocker: "MockerFixture") -> Non
     mock_popen.return_value = mock_process
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.xml.smart_pager")
+    mocker.patch("l_command.handlers.xml.smart_pager")
 
     XMLHandler.handle(xml_file)
 
@@ -138,7 +138,7 @@ def test_handle_html_with_xmllint(tmp_path: Path, mocker: "MockerFixture") -> No
     mock_popen.return_value = mock_process
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.xml.smart_pager")
+    mocker.patch("l_command.handlers.xml.smart_pager")
 
     XMLHandler.handle(html_file)
 
@@ -161,7 +161,7 @@ def test_handle_xml_xmllint_format_failed(tmp_path: Path, mocker: "MockerFixture
     mock_popen.return_value = mock_process
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.xml.smart_pager")
+    mocker.patch("l_command.handlers.xml.smart_pager")
 
     # Mock xmllint validate
     mock_run = mocker.patch("subprocess.run")
@@ -210,7 +210,7 @@ def test_handle_svg_file(tmp_path: Path, mocker: "MockerFixture") -> None:
     mock_popen.return_value = mock_process
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.xml.smart_pager")
+    mocker.patch("l_command.handlers.xml.smart_pager")
 
     XMLHandler.handle(svg_file)
 
@@ -231,7 +231,7 @@ def test_handle_malformed_xml(tmp_path: Path, mocker: "MockerFixture", capsys: "
     mock_popen.return_value = mock_process
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.xml.smart_pager")
+    mocker.patch("l_command.handlers.xml.smart_pager")
 
     # Mock xmllint validate with error
     mock_run = mocker.patch("subprocess.run")

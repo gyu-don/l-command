@@ -2,7 +2,6 @@
 Tests for MarkdownHandler.
 """
 
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -103,7 +102,7 @@ def test_handle_markdown_with_mdcat(tmp_path: Path, mocker: "MockerFixture") -> 
     mock_popen.return_value = mock_process
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.markdown.smart_pager")
+    mocker.patch("l_command.handlers.markdown.smart_pager")
 
     # Mock run to fail for glow
     mock_run = mocker.patch("subprocess.run")
@@ -129,7 +128,7 @@ def test_handle_markdown_with_pandoc(tmp_path: Path, mocker: "MockerFixture") ->
     # Mock mdcat and pandoc available (both via Popen)
     call_count = 0
 
-    def popen_side_effect(*args, **kwargs):
+    def popen_side_effect(*args: object, **kwargs: object) -> object:
         nonlocal call_count
         call_count += 1
         mock_process = mocker.Mock()
@@ -141,7 +140,7 @@ def test_handle_markdown_with_pandoc(tmp_path: Path, mocker: "MockerFixture") ->
     mock_popen = mocker.patch("subprocess.Popen", side_effect=popen_side_effect)
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.markdown.smart_pager")
+    mocker.patch("l_command.handlers.markdown.smart_pager")
 
     MarkdownHandler.handle(md_file)
 
@@ -164,7 +163,6 @@ def test_handle_markdown_no_renderer(tmp_path: Path, mocker: "MockerFixture", ca
     MarkdownHandler.handle(md_file)
 
     # Should fall back to showing source
-    captured = capsys.readouterr()
     # The handler might print info before falling back
     # Verify DefaultFileHandler was eventually called
     assert mock_default.called

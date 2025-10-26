@@ -15,7 +15,6 @@ from l_command.cli import main
 from l_command.constants import (
     MAX_JSON_SIZE_BYTES,
 )
-from l_command.utils import count_lines
 
 # Test directory path relative to this test file
 TEST_DIR = Path(__file__).parent / "test_files"

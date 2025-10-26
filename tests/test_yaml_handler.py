@@ -2,7 +2,6 @@
 Tests for YAMLHandler.
 """
 
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -113,7 +112,7 @@ def test_handle_yaml_with_yq_format(tmp_path: Path, mocker: "MockerFixture") -> 
     mock_popen.return_value = mock_process
 
     # Mock smart_pager
-    mock_pager = mocker.patch("l_command.handlers.yaml.smart_pager")
+    mocker.patch("l_command.handlers.yaml.smart_pager")
 
     YAMLHandler.handle(yaml_file)
 
@@ -130,7 +129,7 @@ def test_handle_yaml_with_yq_validate(tmp_path: Path, mocker: "MockerFixture", c
     yaml_file.write_text("key: value")
 
     # Mock smart_pager to avoid the read issue
-    mock_pager = mocker.patch("l_command.handlers.yaml.smart_pager")
+    mocker.patch("l_command.handlers.yaml.smart_pager")
 
     # Mock yq format failing
     mock_popen = mocker.patch("subprocess.Popen")
