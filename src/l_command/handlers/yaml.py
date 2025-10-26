@@ -6,6 +6,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_QUICK, TIMEOUT_RENDERING
 from l_command.handlers.base import FileHandler
 from l_command.utils import smart_pager
 
@@ -163,7 +164,12 @@ class YAMLHandler(FileHandler):
             smart_pager(yq_process, ["less", "-R"])
 
             # Check if yq process failed
-            yq_retcode = yq_process.wait()
+            try:
+                yq_retcode = yq_process.wait(timeout=TIMEOUT_QUICK)
+            except subprocess.TimeoutExpired:
+                yq_process.kill()
+                logger.warning(f"yq timed out after {TIMEOUT_QUICK}s while formatting {path.name}")
+                return False
             return yq_retcode == 0
         except FileNotFoundError:
             return False
@@ -186,6 +192,7 @@ class YAMLHandler(FileHandler):
                 ["yq", "length", str(path)],
                 capture_output=True,
                 text=True,
+                timeout=TIMEOUT_QUICK,
             )
 
             if result.returncode == 0:
@@ -212,6 +219,10 @@ class YAMLHandler(FileHandler):
 
                 DefaultFileHandler.handle(path)
                 return True
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"yq validation timed out after {TIMEOUT_QUICK}s")
+            return False
 
         except subprocess.SubprocessError:
             return False
@@ -241,9 +252,14 @@ class YAMLHandler(FileHandler):
             smart_pager(bat_process, ["less", "-R"])
 
             # Check if bat process failed
-            bat_retcode = bat_process.wait()
-            if bat_retcode == 0:
-                return
+            try:
+                bat_retcode = bat_process.wait(timeout=TIMEOUT_RENDERING)
+            except subprocess.TimeoutExpired:
+                bat_process.kill()
+                logger.warning(f"bat timed out after {TIMEOUT_RENDERING}s")
+            else:
+                if bat_retcode == 0:
+                    return
         except FileNotFoundError:
             pass
         except subprocess.SubprocessError:

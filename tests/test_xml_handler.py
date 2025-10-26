@@ -2,8 +2,10 @@
 Tests for XMLHandler.
 """
 
+import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from l_command.handlers.xml import XMLHandler
 
@@ -59,3 +61,25 @@ def test_can_handle_xml_content() -> None:
 def test_priority() -> None:
     """Test XML handler priority."""
     assert XMLHandler.priority() == 45
+
+
+@patch("subprocess.Popen")
+def test_xmllint_timeout_handling(mock_popen) -> None:
+    """Test that xmllint timeout is handled gracefully."""
+    # Create a mock process that will timeout on wait()
+    mock_process = MagicMock()
+    mock_process.wait.side_effect = subprocess.TimeoutExpired(cmd="xmllint", timeout=30)
+    mock_process.stdout = None
+    mock_process.stderr = None
+    mock_popen.return_value = mock_process
+
+    with tempfile.NamedTemporaryFile(suffix=".xml", mode="w") as tmp:
+        tmp.write("<root>content</root>")
+        tmp.flush()
+        path = Path(tmp.name)
+
+        # Should not raise an exception
+        XMLHandler.handle(path)
+
+        # Verify process.kill was called after timeout
+        assert mock_process.kill.called

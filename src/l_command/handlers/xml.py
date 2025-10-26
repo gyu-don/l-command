@@ -6,6 +6,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_QUICK
 from l_command.handlers.base import FileHandler
 from l_command.utils import smart_pager
 
@@ -104,7 +105,16 @@ class XMLHandler(FileHandler):
                 smart_pager(xmllint_process, ["less", "-R"])
 
                 # Check if xmllint process failed
-                xmllint_retcode = xmllint_process.wait()
+                try:
+                    xmllint_retcode = xmllint_process.wait(timeout=TIMEOUT_QUICK)
+                except subprocess.TimeoutExpired:
+                    xmllint_process.kill()
+                    logger.warning(
+                        f"xmllint timed out after {TIMEOUT_QUICK}s while formatting {path.name}.",
+                    )
+                    cls._show_xml_info_and_content(path, file_size)
+                    return
+
                 if xmllint_retcode != 0:
                     # If formatting failed, try without formatting
                     cls._try_xmllint_without_format(path)
@@ -145,6 +155,7 @@ class XMLHandler(FileHandler):
                 ["xmllint", "--noout", str(path)],
                 capture_output=True,
                 text=True,
+                timeout=TIMEOUT_QUICK,
             )
 
             if result.returncode == 0:
@@ -162,6 +173,10 @@ class XMLHandler(FileHandler):
                 from l_command.handlers.default import DefaultFileHandler
 
                 DefaultFileHandler.handle(path)
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"xmllint validation timed out after {TIMEOUT_QUICK}s")
+            cls._show_xml_info_and_content(path, path.stat().st_size)
 
         except subprocess.SubprocessError:
             # If even validation fails, show raw content

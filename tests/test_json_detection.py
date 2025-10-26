@@ -1,5 +1,7 @@
+import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from l_command.handlers.json import JsonHandler
 
@@ -89,3 +91,23 @@ def test_should_try_jq_with_test_files() -> None:
     empty_json = test_files_dir / "empty.json"  # Assuming this exists
     if empty_json.exists():  # Add check in case it doesn't
         assert JsonHandler.can_handle(empty_json) is False
+
+
+@patch("subprocess.run")
+def test_jq_timeout_handling(mock_run) -> None:
+    """Test that jq timeout is handled gracefully."""
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="jq", timeout=30)
+
+    with tempfile.NamedTemporaryFile(suffix=".json", mode="w") as tmp:
+        tmp.write('{"key": "value"}')
+        tmp.flush()
+        path = Path(tmp.name)
+
+        # Should not raise an exception
+        JsonHandler.handle(path)
+
+        # Verify subprocess.run was called with timeout parameter
+        assert mock_run.called
+        call_args = mock_run.call_args
+        assert call_args is not None
+        assert "timeout" in call_args.kwargs or (len(call_args.args) > 0 and "timeout" in str(call_args))

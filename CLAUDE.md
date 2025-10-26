@@ -63,10 +63,20 @@ The application uses a **chain-of-responsibility pattern** with file handlers:
 
 - `src/l_command/` - main package
   - `cli.py` - entry point and argument parsing
-  - `constants.py` - shared constants
+  - `constants.py` - shared constants (including timeout values for external tools)
   - `utils.py` - utility functions
   - `handlers/` - file type handlers
 - `tests/` - pytest test suite with test files in `test_files/`
+
+### Timeout Handling
+
+All external tool invocations include timeout handling to prevent the application from hanging:
+
+- **TIMEOUT_QUICK (30s)**: Fast utilities like xmllint, yq, jq, file
+- **TIMEOUT_PROCESSING (60s)**: Processing tools like ffprobe, pdfminer, unzip/tar
+- **TIMEOUT_RENDERING (45s)**: Rendering tools like timg, glow, mdcat, pandoc, bat, hexdump
+
+When a timeout occurs, the handler logs a warning and falls back to basic info display or the default handler.
 
 ### Execution Flow
 

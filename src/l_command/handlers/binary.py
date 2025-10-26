@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from l_command.constants import TIMEOUT_QUICK, TIMEOUT_RENDERING
 from l_command.handlers.base import FileHandler
 from l_command.utils import smart_pager
 
@@ -66,7 +67,7 @@ class BinaryHandler(FileHandler):
                     capture_output=True,
                     text=True,
                     check=True,
-                    timeout=1,  # Add a timeout to prevent hangs
+                    timeout=TIMEOUT_QUICK,
                 )
                 encoding = result.stdout.strip()
                 # Treat 'binary' or 'unknown-*' as binary
@@ -122,7 +123,13 @@ class BinaryHandler(FileHandler):
             smart_pager(hexdump_process, ["less", "-R"])
 
             # Check if hexdump process failed
-            hexdump_retcode = hexdump_process.wait()
+            try:
+                hexdump_retcode = hexdump_process.wait(timeout=TIMEOUT_RENDERING)
+            except subprocess.TimeoutExpired:
+                hexdump_process.kill()
+                logger.warning(f"hexdump timed out after {TIMEOUT_RENDERING}s while processing {path.name}")
+                return
+
             if hexdump_retcode != 0:
                 logger.error(f"hexdump process exited with code {hexdump_retcode}")
 
