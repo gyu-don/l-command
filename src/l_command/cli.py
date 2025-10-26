@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from l_command.config import load_config
 from l_command.handlers import get_handlers
 
 
@@ -28,8 +29,11 @@ def main() -> int:
         return 1
 
     try:
+        # Load configuration
+        config = load_config()
+
         # Find appropriate handler and delegate processing
-        for handler_class in get_handlers():
+        for handler_class in get_handlers(config):
             if handler_class.can_handle(path):
                 handler_class.handle(path)
                 break
